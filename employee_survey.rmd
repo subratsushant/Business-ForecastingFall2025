@@ -1,0 +1,76 @@
+---
+title: "Untitled"
+output: html_document
+date: "2025-09-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+
+# Read CSV File
+Typical_Employee_Survey_Data1 <- read.csv("Typical_Employee_Survey_Data1.csv")
+
+
+
+#1. Print out the 5-point summary and boxplot (numerical columns) for each column
+
+summary(Typical_Employee_Survey_Data1)              # shows min, 1st Qu., Median, 3rd Qu., Max
+boxplot(Typical_Employee_Survey_Data1, las=2)       # boxplots for numeric columns (las=2 makes labels vertical)
+
+#2. Convert the columns that need to be converted to Factors
+
+Typical_Employee_Survey_Data1$GENDER <- as.factor(Typical_Employee_Survey_Data1$GENDER)    # change "GENDER" column to factor
+Typical_Employee_Survey_Data1$JOBSATISFACTION <- as.factor(Typical_Employee_Survey_Data1$JOBSATISFACTION) # change "JOBSATISFACTION" column to factor
+Typical_Employee_Survey_Data1$IMPJOBCHAR <- as.factor(Typical_Employee_Survey_Data1$IMPJOBCHAR) # change "IMPJOBCHAR" column to factor
+Typical_Employee_Survey_Data1$PROMOTIONAL <- as.factor(Typical_Employee_Survey_Data1$PROMOTIONAL) # change "PROMOTIONAL" column to factor
+Typical_Employee_Survey_Data1$DECISIONS <- as.factor(Typical_Employee_Survey_Data1$DECISIONS) # change "DECISIONS" column to factor
+Typical_Employee_Survey_Data1$BUD.DEC <- as.factor(Typical_Employee_Survey_Data1$BUD.DEC) # change "BUD.DEC" column to factor
+Typical_Employee_Survey_Data1$ORGANIZATIONS <- as.factor(Typical_Employee_Survey_Data1$ORGANIZATIONS) # change "ORGANIZATIONS" column to factor
+Typical_Employee_Survey_Data1$JOBCHUMFORPAYLIKELIHOOD <- as.factor(Typical_Employee_Survey_Data1$JOBCHUMFORPAYLIKELIHOOD) # change "JOBCHUMFORPAYLIKELIHOOD" column to factor
+Typical_Employee_Survey_Data1$REALATION <- as.factor(Typical_Employee_Survey_Data1$REALATION) # change "REALATION" column to factor
+str(Typical_Employee_Survey_Data1) 
+
+#3. Plot the right visual for each column
+# AGE (numeric) → histogram
+hist(Typical_Employee_Survey_Data1$AGE, main="Histogram of Age", xlab="Age")
+
+# GENDER (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$GENDER), main="Barplot of Gender", xlab="Gender")
+
+# JOBSATISFACTION (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$JOBSATISFACTION), main="Barplot of Job Satisfaction", xlab="Satisfaction Level")
+
+# IMPJOBCHAR (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$IMPJOBCHAR), main="Barplot of Important Job Characteristics", xlab="Importance Level")
+
+# YRSINJOB (numeric) → histogram
+hist(Typical_Employee_Survey_Data1$YRSINJOB, main="Histogram of Years in Job", xlab="Years in Job")
+
+# PROMOTIONAL (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$PROMOTIONAL), main="Barplot of Promotional Opportunities", xlab="Opportunities")
+
+# DECISIONS (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$DECISIONS), main="Barplot of Decisions", xlab="Decision Level")
+
+# BUD.DEC (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$BUD.DEC), main="Barplot of Budget Decisions", xlab="Budget Decisions")
+
+# ORGANIZATIONS (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$ORGANIZATIONS), main="Barplot of Organizations", xlab="Organizations")
+
+# JOBCHUMFORPAYLIKELIHOOD (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$JOBCHUMFORPAYLIKELIHOOD), main="Barplot of Job Change Likelihood", xlab="Likelihood")
+
+# REALATION (categorical) → barplot
+barplot(table(Typical_Employee_Survey_Data1$REALATION), main="Barplot of Relation", xlab="Relation Level")
+
+
+#4. Plot scatter plots to show few relationships
+plot(Typical_Employee_Survey_Data1$AGE, Typical_Employee_Survey_Data1$YRSINJOB, main="Age vs Years in Job", xlab="Age", ylab="Years in Job")
+plot(Typical_Employee_Survey_Data1$AGE, Typical_Employee_Survey_Data1$PROMOTIONAL, main="Age vs Promotional", xlab="Age", ylab="Promotional Opportunities")
+
+```
+
+

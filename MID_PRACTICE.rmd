@@ -1,0 +1,871 @@
+---
+title: "mid_term_1"
+output: html_document
+date: "2025-10-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(readr)
+
+df <- read_csv("/Users/subratsushant/Documents/r_programming/upload food.csv")
+head(df); 
+str(df)
+library(fpp2)
+# make clean 2-column data, parse YYYY-MM → Date(1st), sort, collapse duplicates
+df2 <- df[, c("Date","Food Price Index")]
+df2$Date <- as.Date(paste0(trimws(df2$Date), "-01"))
+df2 <- aggregate(`Food Price Index` ~ Date, df2, mean)
+df2 <- df2[order(df2$Date), ]
+
+# Q1)Plot and Inference
+#• Show a time series plot.
+#• Please summarize your observations of the time series plot
+#• Plot and describe your observations from the Acf
+
+
+# Plot and Inference
+plot(df2$Date, df2$`Food Price Index`, type = "l",
+     xlab = "Date", ylab = "Food Price Index")
+# ------------------------------------------------------------
+# Plot explanation — FAO Food Price Index over time
+# x-axis = Date (monthly). y-axis = Food Price Index level.
+# Black line = the actual index each month (no forecasts here).
+#
+# What we see:
+# - 1990s: relatively low and gently drifting between ~55–80.
+# - ~2006–2011: strong upsurge with two sharp peaks (around 2008 and 2011),
+#   showing a rapid run-up and then a quick drop — high volatility.
+# - 2012–2019: mostly downward/sideways drift, stabilizing in the 90–110 range.
+# - 2020–2022: steep climb to the highest peak (~2022), then a pullback,
+#   followed by a modest rebound into 2023–2024.
+#
+# Takeaways for modeling :
+# - Clear level shifts and long swings → a simple mean/SES will underfit.
+# - No obvious strict seasonality by eye, but there is strong trend/structural change.
+# - Consider models that allow trend and changing level (Holt, damped trend, ETS),
+#   and always check residual ACF (aim for near-zero autocorrelation).
+# ------------------------------------------------------------
+
+
+
+library(forecast)
+library(lubridate)
+
+# y = monthly ts from df2
+y <- ts(df2$`Food Price Index`[order(df2$Date)], frequency = 12)
+
+# ACF of value series only
+
+Acf(y, lag.max = 48, main = "ACF — Food Price Index (monthly)")
+
+# What this graphic is:
+# - An ACF (AutoCorrelation Function) of the *raw* Food Price Index series.
+# - X-axis = lag in months. Y-axis = correlation of the series with itself.
+# - Vertical bars = autocorrelation at each lag.
+# - Dashed blue lines ≈ 95% significance limits (bars beyond them are “significant”).
+#
+# What plot shows:
+# 1) Bars start very high (near 1) and decay slowly across many lags.
+#    → Strong persistence / non-stationarity (the level changes over time).
+# 2) Bars are positive for a long stretch and many exceed the dashed bounds.
+#    → Strong serial correlation remains; a mean/SES model would underfit.
+# 3) No clear spikes at multiples of 12 (12, 24, 36…).
+#    → No strong, regular yearly seasonality visible in the raw series
+#      (any seasonality is weak compared to the trend/level shifts).
+# "The ACF shows very high positive autocorrelation with a slow decay and no
+# strong seasonal spikes, indicating a non-stationary trend-dominated series.
+# A trend-capable model (Holt/damped/ETS) or first differencing is recommended,
+# followed by residual ACF checks."
+
+
+
+
+# Q2)Central Tendency
+#• What is the min, max, mean, median, 1st, and 3rd Quartile values of the times series?
+#• Show the box plot.
+#• Can you summarize your observation about the time series from the summary stats and
+#box plot?
+
+
+#Central Tendency
+# Simple summary for Food Price Index
+x <- df2$`Food Price Index`
+
+summary(x)  # prints Min, 1st Qu., Median, Mean, 3rd Qu., Max
+
+# -------------------- Summary(x) — Explanation of each value --------------------
+# Min.    = 50.80
+#   -> The smallest monthly Food Price Index observed in your time series.
+
+# 1st Qu. = 64.60  (Q1, 25th percentile)
+#   -> 25% of all months are at or below 64.60. This marks the lower "typical" level.
+
+# Median  = 86.60  (50th percentile)
+#   -> Half the months are ≤ 86.60 and half are ≥ 86.60. This is the center of the data,
+#      robust to outliers and spikes.
+
+# Mean    = 88.77  (arithmetic average)
+#   -> The average month. It is slightly higher than the median (88.77 > 86.60),
+#      hinting at a mild right-skew (some higher values pulling the mean up).
+
+# 3rd Qu. = 116.20 (Q3, 75th percentile)
+#   -> 75% of months are ≤ 116.20. Values above this are in the upper quarter.
+
+# Max.    = 160.20
+#   -> The largest monthly Food Price Index observed (peak level).
+
+# Extra useful summaries (computed from the above):
+# Range = Max - Min = 160.20 - 50.80 = 109.40
+#   -> Total spread of the series.
+
+# IQR   = Q3 - Q1   = 116.20 - 64.60 = 51.60
+#   -> Spread of the middle 50% of months; less sensitive to outliers than the range.
+
+# Practical takeaway:
+# - Typical months lie between ~64.6 (Q1) and ~116.2 (Q3).
+# - Mild right-skew (mean > median) suggests some high-value months (spikes),
+#   consistent with known peaks in food prices.
+# ------------------------------------------------------------------------------
+
+# Boxplot 
+boxplot(df2$`Food Price Index`,
+        horizontal = TRUE,
+        main = "Boxplot — Food Price Index",
+        xlab = "Food Price Index")
+
+# Boxplot summary:
+# - Box = middle 50% (Q1≈64.6 to Q3≈116.2).
+# - Line in box = median ≈ 86.6.
+# - Whiskers ≈ min 50.8 to max 160.2 (no outliers shown).
+# - Right whisker > left → right-skew (some high spikes).
+# - Typical range ≈ 65–116; occasional highs up to ~160.
+
+
+#Q3)Naïve Method
+#• Output
+#• Perform Residual Analysis for this technique.
+#o Do a plot of residuals. What does the plot indicate?
+#o Do a Histogram plot of residuals. What does the plot indicate?
+#o Do a plot of fitted values vs. residuals. What does the plot indicate?
+#o Do a plot of actual values vs. residuals. What does the plot indicate?
+#o Do an ACF plot of the residuals? What does this plot indicate?
+#• Print the five measures of accuracy for this forecasting technique
+#• Forecast
+#o Time series value for next year. Show table and plot
+#• Summarize this forecasting technique
+#o How good is the accuracy?
+#o What does it predict the time series value will be in one year?
+#o Other observation
+
+
+#Naïve forecast
+autoplot(naive(y, h = 12))     # plot the Naïve forecast
+# Naïve forecast (short):
+# - Future = last observed value (flat line at the latest point).
+# - Dark/Light blue bands = 80%/95% prediction intervals that widen with horizon.
+# - Used as a simple baseline; better models should beat its error (MASE < 1).
+
+
+# Simple residual analysis for Naïve method (assumes time series y exists)
+library(forecast)
+
+fit <- naive(y)                         # fit naïve
+res <- residuals(fit)                   # residuals
+fitv <- fitted(fit)                     # fitted (in-sample)
+act  <- as.numeric(y)[seq_along(res)]   # actuals aligned to residuals
+
+par(mfrow = c(2,2))
+plot(res, type="h", main="Residuals over time", xlab="Time", ylab="Residual")
+hist(res, breaks="FD", main="Histogram of residuals", xlab="Residual")
+plot(fitv, res, pch=16, main="Fitted vs Residuals", xlab="Fitted", ylab="Residual"); abline(h=0,lty=2)
+plot(act,  res, pch=16, main="Actual vs Residuals", xlab="Actual",  ylab="Residual"); abline(h=0,lty=2)
+# Residual diagnostics (short):
+
+# Residuals over time (top-left):
+# • Mostly around 0, but clear runs/clusters and a few big spikes → autocorrelation + outliers.
+
+# Histogram (top-right):
+# • Roughly bell-shaped and centered near 0, but with heavier tails → some non-normality.
+
+# Fitted vs Residuals (bottom-left):
+# • Cloud with slight funnel/wider spread at higher fitted values → variance not constant.
+
+# Actual vs Residuals (bottom-right):
+# • Similar widening with level → heteroskedasticity; large actuals have bigger errors.
+
+# Takeaway:
+# • Naïve model leaves autocorrelation and changing variance; move to Holt/damped/ETS
+#   (and recheck residuals) for a better fit and more reliable intervals.
+
+
+par(mfrow = c(1,1))
+
+Acf(res, lag.max = 48, main = "ACF of residuals")  # residual autocorrelation
+
+# ACF of residuals — short read:
+# • Big positive spikes at small lags (1–5) → residuals are autocorrelated (not white noise).
+# • Long run of negative bars around ~18–26 → leftover medium-lag structure.
+# • Bump near ~36–40 → possible longer-cycle/seasonal effect not captured.
+# ⇒ Naïve model is inadequate; try Holt/damped or Holt-Winters/ETS and re-check.
+
+# Quick test:
+# checkresiduals(fit)     # expect Ljung–Box p < 0.05 here
+
+# Five accuracy measures for the Naïve forecast
+library(forecast)
+fit  <- naive(y)
+acc5 <- accuracy(fit)[1, c("ME","RMSE","MAE","MAPE","MASE")]
+round(acc5, 4)
+
+
+#Forecast
+# Time series value for next year. Show table and plot
+library(forecast)
+
+fc <- naive(y, h = 12)                     # forecast next 12 months
+
+# table of next year's values
+future_dates <- seq(max(df2$Date) + 1, by = "month", length.out = 12)
+future_dates <- as.Date(format(future_dates, "%Y-%m-01"))        # first of month
+print(data.frame(Date = future_dates, Forecast = round(as.numeric(fc$mean), 2)))
+
+#         Date Forecast
+#1  2025-08-01    130.1
+#2  2025-09-01    130.1
+#3  2025-10-01    130.1
+#4  2025-11-01    130.1
+#5  2025-12-01    130.1
+#6  2026-01-01    130.1
+#7  2026-02-01    130.1
+#8  2026-03-01    130.1
+#9  2026-04-01    130.1
+#10 2026-05-01    130.1
+#11 2026-06-01    130.1
+#12 2026-07-01    130.1
+
+autoplot(fc) + ggplot2::labs(title="Naïve forecast: next 12 months",
+                             y="Food Price Index", x="Time")      # plot
+
+# Naïve forecast — next 12 months (short & effective):
+# • Black line: history. 
+# • Blue center: flat point forecast = last observed value repeated.
+# • Dark/Light blue bands: 80%/95% prediction intervals that widen with horizon
+#   (uncertainty grows the further we forecast).
+# • Takeaway: This is a baseline only—no trend or seasonality learned. Use it to
+#   compare smarter models; good models should beat its error (MASE < 1).
+
+# ----------------  Naïve Forecast — Summary ----------------
+# • Accuracy: This is a baseline model. Residual plots + residual ACF show
+#   autocorrelation and changing variance, so errors aren’t white noise.
+#   Conclusion: Naïve misses structure (trend/level shifts); use only for comparison.
+#   (Good models should beat it, i.e., achieve MASE < 1 vs naïve.)
+#
+# • One-year prediction: The point forecast 12 months ahead equals the LAST
+#   observed value in the series (flat forecast each future month).
+#   # number used by the model:
+#   # tail(df2$`Food Price Index`, 1)
+#
+# • Other observations:
+#   - Forecast line is flat; 80%/95% intervals widen with horizon.
+#   - Very sensitive to the last data point (end outliers propagate forward).
+#   - Ignores trend/seasonality; next step is a trend-capable model (Holt,
+#     damped Holt, or ETS/Holt-Winters) and re-check residuals.
+# -------------------------------------------------------------------
+
+#Q4)Simple Moving Averages
+#• Plot the graph for the time series.
+#• Show the Simple Moving average of order three on the plot above in Red
+#• Show the Simple Moving average of order six on the plot above in Blue
+#• Show the Simple Moving average of order nine on the plot above in Green
+#• (Bonus) Show the forecast for the next 12 months using one of the simple average
+#orders that you feel works best for the time series
+#• What are your observations of the plot as the moving average order goes up?
+
+
+
+
+#)Simple Moving Averages
+#• Plot the graph for the time series.
+#• Show the Simple Moving average of order three on the plot above in Red
+#• Show the Simple Moving average of order six on the plot above in Blue
+#• Show the Simple Moving average of order nine on the plot above in Green
+#• (Bonus) Show the forecast for the next 12 months using one of the simple average
+#orders that you feel works best for the time series
+#• What are your observations of the plot as the moving average order goes up?
+
+
+
+
+# plot series + SMA(3/6/9) and a 12-month SMA(6) forecast
+
+
+# a) Sort and pick the two columns
+df2 <- df2[order(df2$Date), c("Date","Food Price Index")]
+x  <- df2$`Food Price Index`
+
+# b) Simple Moving Averages (right-aligned)
+sma3 <- stats::filter(x, rep(1/3, 3), sides = 1)
+sma6 <- stats::filter(x, rep(1/6, 6), sides = 1)
+sma9 <- stats::filter(x, rep(1/9, 9), sides = 1)
+
+# c) Plot time series + SMAs
+plot(df2$Date, x, type="l", xlab="Date", ylab="Food Price Index",
+     main="SMA: 3 (red), 6 (blue), 9 (green)")
+lines(df2$Date, sma3, col="red",   lwd=2)
+lines(df2$Date, sma6, col="blue",  lwd=2)
+lines(df2$Date, sma9, col="green", lwd=2)
+
+
+
+# SMA plot 
+# • Black = original series. Red = SMA(3), Blue = SMA(6), Green = SMA(9).
+# • Higher order ⇒ smoother but more lag:
+#     - SMA(3) (red): follows turns quickly, still noisy.
+#     - SMA(6) (blue): balanced smoothing (good compromise).
+#     - SMA(9) (green): very smooth, reacts late to peaks/drops.
+# • Right edge (blue dashed): flat 12-month forecast from the last SMA(6) value.
+# • Takeaway: as k increases, short-term wiggles vanish but timing lags grow;
+#   SMA(6) looks reasonable here for a simple baseline forecast.
+
+
+# 4) Forecast next 12 months using last SMA(6) value (flat line)
+last6  <- as.numeric(tail(na.omit(sma6), 1))
+future <- seq(max(df2$Date), by = "month", length.out = 13)[-1]
+lines(c(tail(df2$Date,1), future), c(last6, rep(last6, 12)),
+      col="blue", lwd=2, lty=2)
+
+
+# (Optional) show forecast table
+data.frame(Date = future, Forecast_SMA6 = round(rep(last6, 12), 2))
+
+#        Date Forecast_SMA6
+#1  2025-09-01        128.45
+#2  2025-10-01        128.45
+#3  2025-11-01        128.45
+#4  2025-12-01        128.45
+#5  2026-01-01        128.45
+#6  2026-02-01        128.45
+#7  2026-03-01        128.45
+#8  2026-04-01        128.45
+#9  2026-05-01        128.45
+#10 2026-06-01        128.45
+#11 2026-07-01        128.45
+#12 2026-08-01        128.45
+
+
+
+#Q5)Simple Smoothing
+#• Perform a simple smoothing forecast for the next 12 months for the time series.
+#o What is the value of alpha? What does that value signify?
+#o What is the value of the initial state?
+#o What is the value of sigma? What does the sigma signify?
+#• Perform Residual Analysis for this technique.
+#o Do a plot of residuals. What does the plot indicate?
+#o Do a Histogram plot of residuals. What does the plot indicate?
+#o Do a plot of fitted values vs. residuals. What does the plot indicate?
+#o Do a plot of actual values vs. residuals. What does the plot indicate?
+#o Do an ACF plot of the residuals? What does this plot indicate?
+#• Print the five measures of accuracy for this forecasting technique
+#• Forecast
+#o Time series value for next year. Show table and plot
+#• Summarize this forecasting technique
+#o How good is the accuracy?
+#o What does it predict the time series value will be in one year?
+#o Other observation
+
+
+# ==== SES (Simple Exponential Smoothing) ====
+library(forecast)          # run once: install.packages("forecast")
+
+# assume monthly ts `y` already made from df2
+m  <- ets(y, model = "ANN")      # SES fit
+fc <- forecast(m, h = 12)    # next 12 months
+
+
+
+# params
+round(c(alpha = m$par["alpha"],
+        init_level = m$states[1,"l"],
+        sigma = sqrt(m$sigma2)), 4)
+# ---------------- SES (ETS(A,N,N)) — Answers based on output ----------------
+# Alpha = 0.9999
+#   -> Almost 1, so SES puts ~all weight on the most recent observation.
+#      Practically behaves like a naïve/random-walk forecast (very little smoothing).
+
+# Initial state (level) = 64.4155
+#   -> The starting level l0 the model initialized from; baseline at the beginning
+#      of the series used to start the recursive SES updates.
+
+# Sigma = 2.5041
+#   -> Residual standard deviation: a typical in-sample error is ~2.5 index points.
+
+
+# residual analysis (one-shot + two quick scatters)
+checkresiduals(m)                 # time-plot, ACF, histogram + Ljung–Box
+
+# SES (ETS(A,N,N)) residual diagnostics —
+# • Residuals vs time: centered around 0 but with a few big spikes → outliers/level shifts.
+# • ACF: significant positive spikes at small lags and a negative block around ~18–26,
+#        then small positives later → residuals are autocorrelated (not white noise).
+# • Histogram: roughly bell-shaped and near 0, but heavier right tail → some non-normality.
+# ⇒ SES misses structure (trend/longer-cycle effects). Try Holt/damped or ETS with trend,
+#    then re-check residuals and Ljung–Box.
+
+plot(fitted(m), residuals(m))     # fitted vs residuals
+# Fitted vs Residuals — :
+# • Dots are centered around 0 (good), but spread changes with fitted level:
+#   wider scatter at some fitted ranges → non-constant variance (heteroskedasticity).
+# • Clear clusters by level (≈ 60, 100, 120+) → regime/level shifts not captured by SES.
+# • A few large outliers (far above/below 0) → occasional shocks the model misses.
+# ⇒ Residuals aren’t “nice & constant”; SES (no trend) is too simple. Try Holt/damped/ETS.
+
+plot(as.numeric(y)[seq_along(residuals(m))], residuals(m))  # actual vs residuals
+# Actual vs Residuals — :
+# • Dots are centered near 0 → average error ~0.
+# • Spread grows at higher actual values (right side) → non-constant variance
+#   (heteroskedasticity): big levels have bigger errors.
+# • Clear clusters around ~60, ~100, ~120+ → different regimes/level shifts the
+#   SES model doesn’t capture.
+# • A few extreme points (top/bottom) → outliers/shocks.
+# ⇒ Residuals aren’t homoscedastic or independent; move to a trend-capable model
+#    (Holt/damped/ETS with trend) and recheck residuals.
+
+
+# five accuracy measures
+round(accuracy(fc)[1, c("ME","RMSE","MAE","MAPE","MASE")], 4)
+
+# forecast table + plot
+future <- seq(max(time(y)), by = 1/frequency(y), length.out = 12)
+print(data.frame(Horizon = 1:12, Forecast = round(as.numeric(fc$mean), 2)))
+#   Horizon Forecast
+#1        1    130.1
+#2        2    130.1
+#3        3    130.1
+#4        4    130.1
+#5        5    130.1
+#6        6    130.1
+#7        7    130.1
+#8        8    130.1
+#9        9    130.1
+#10      10    130.1
+#11      11    130.1
+#12      12    130.1
+
+plot(fc, main = "SES forecast — next 12 months")
+
+# SES forecast — next 12 months :
+# • Black = history. Blue center = SES point forecast; shaded = 80%/95% intervals.
+# • With alpha ≈ 1, SES tracks the last value closely → near-flat forecast at the
+#   recent level (behaves like naïve).
+# • Bands widen into the future → growing uncertainty.
+# • Takeaway: good as a simple baseline; still misses trend/longer cycles seen in history.
+
+#Simple Exponential Smoothing (SES / ETS(A,N,N))
+
+# How good is the accuracy?
+# - Not great for this series. The Ljung–Box test (p < 2.2e-16) says the residuals
+#   are autocorrelated, so SES is missing patterns in the data. I’ll treat this as
+#   a baseline only and expect better models (Holt/ETS with trend) to beat its MASE.
+
+# What will it predict one year ahead?
+# - My fitted model has alpha ≈ 0.9999, which means it mostly copies the latest value.
+#   So the 12-month-ahead point forecast is basically the most recent index level
+#   (near-flat line).  # exact number: as.numeric(tail(forecast(m, h=12)$mean, 1))
+
+# Other observations
+# - Alpha ≈ 1 ⇒ very little smoothing; behaves almost like a naïve forecast.
+# - Forecast bands widen over time, showing growing uncertainty.
+# - Residual plots show clusters/outliers → I should use a trend-capable model
+#   (Holt or ETS with trend, maybe damped) and then re-check residuals.
+
+
+
+
+#Q6)Holt-Winters
+#• Perform a Holt-Winters forecast for the next 12 months for the time series.
+#o What is the value of alpha? What does that value signify?
+#o What is the value of beta? What does that value signify?
+#o What is the value of gamma? What does that value signify?
+#o What is the value of initial states for the level, trend, and seasonality? What do
+#these values signify?
+#o What is the value of sigma? What does the sigma signify?
+#• Perform Residual Analysis for this technique.
+#o Do a plot of residuals. What does the plot indicate?
+#o Do a Histogram plot of residuals. What does the plot indicate?
+#o Do a plot of fitted values vs. residuals. What does the plot indicate?
+#o Do a plot of actual values vs. residuals. What does the plot indicate?
+#o Do an ACF plot of the residuals? What does this plot indicate?
+#• Print the five measures of accuracy for this forecasting technique
+#• Forecast
+#o Time series value for next year. Show table and plot
+#• Summarize this forecasting technique
+#o How good is the accuracy?
+#o What does it predict the time series value will be in one year?
+#o Other observation
+
+
+
+# Holt–Winters forecast for next 12 months
+library(forecast)
+fc <- hw(y, seasonal = "additive", h = 12)
+plot(fc)
+# Holt–Winters (additive) forecast — next 12 months:
+# • Black line = history. Blue line = HW point forecast using level + trend + additive seasonality.
+# • Shaded bands = 80% (dark) and 95% (light) prediction intervals that widen with horizon.
+# • Forecast gently continues the recent upward level and repeats seasonal pattern each year.
+# • Takeaway: captures trend + seasonality (better than naïve/SES), but intervals show
+#   substantial uncertainty given past volatility.
+
+# Simple Holt–Winters (additive): fit + print alpha, beta, gamma, initial states, sigma
+# Print alpha, beta, gamma, initial states (level, trend, seasonals) and sigma
+library(forecast)
+
+m <- ets(y, model = "AAA")  # Holt–Winters (additive)
+
+print(round(c(
+  alpha       = m$par["alpha"],
+  beta        = m$par["beta"],
+  gamma       = m$par["gamma"],
+  init_level  = m$states[1, "l"],
+  init_trend  = m$states[1, "b"],
+  sigma       = sqrt(m$sigma2)
+), 4))
+
+# ------- Holt–Winters (ETS-AAA) parameters — what your numbers mean -------
+# alpha = 0.9999
+#   • Level smoothing weight ~1 → model puts almost ALL weight on the latest value.
+#   • Effect: level tracks the most recent month very closely (behaves ~ like naïve).
+
+# beta = 0.1366
+#   • Trend smoothing weight ~0.14 → trend updates, but not too aggressively.
+#   • Effect: slope responds to new data, but with moderate inertia.
+
+# gamma = 0.0001
+#   • Seasonal smoothing weight ~0 → seasonality is treated as nearly fixed.
+#   • Effect: seasonal pattern changes very slowly (essentially held constant).
+
+# init_level = 63.3547
+#   • Starting baseline (ℓ₀) of the series when the model begins filtering.
+#   • Units: Food Price Index points.
+
+# init_trend = -0.1569
+#   • Starting slope (b₀): about −0.157 index points per month at initialization.
+#   • Sign: negative ⇒ initial tendency was slightly downward.
+
+# sigma = 2.3609
+#   • Residual standard deviation (typical error size) in index points.
+#   • Interpretation: a “typical” one-step error is ~2.36 points; smaller = better fit.
+# ---------------------------------------------------------------------------
+
+
+# ---- Residual analysis (Holt–Winters via ETS) — simple & small ----
+library(forecast)
+
+# Fit model (use your y; skip this line if `m` already exists)
+m <- ets(y, model = "AAA")
+
+res  <- residuals(m)
+fitv <- fitted(m)
+act  <- as.numeric(y)[seq_along(res)]
+
+# 1) Residuals over time (look for random scatter around 0)
+plot(res, type="h", main="Residuals over time"); abline(h=0,lty=2)
+
+# Residuals over time — :
+# • Mostly around 0 → average error ≈ 0.
+# • Long runs of positives/negatives (esp. ~20–26, ~32–34) → autocorrelation; model misses structure.
+# • Periods of bigger swings vs. calmer periods → changing variance (heteroskedasticity).
+# • A few very large spikes (big + near ~34, big – near ~20 & ~34) → outliers/level shifts.
+# ⇒ Residuals aren’t white noise; Holt–Winters still leaves pattern/volatility unmodeled.
+
+# 2) Histogram (look for bell shape centered at 0)
+hist(res, breaks="FD", main="Histogram of residuals", xlab="Residual")
+# Histogram of residuals — short read:
+# • Centered near 0 with a bell shape → mean error ~0 (good).
+# • Slight right skew and some far tails/outliers (both sides) → not perfectly normal.
+# • A few large positive residuals → occasional under-forecasting spikes.
+# ⇒ Intervals assuming normality may be a bit optimistic; model still leaves some extremes.
+
+
+# 3) Fitted vs Residuals (look for no pattern/funnel)
+plot(fitv, res, pch=16, main="Fitted vs Residuals"); abline(h=0,lty=2)
+# Fitted vs Residuals — short read:
+# • Points are centered near 0 → mean error ~0.
+# • Spread increases at higher fitted values → non-constant variance (heteroskedasticity).
+# • Visible clusters by level (~60, ~95–125, ~140+) → regime/level shifts not fully modeled.
+# • Several large outliers (above/below) → occasional shocks the model misses.
+# ⇒ Residuals aren’t perfectly random/constant; HW improves fit but still leaves structure.
+
+# 4) Actual vs Residuals (look for constant spread)
+plot(act, res, pch=16, main="Actual vs Residuals"); abline(h=0,lty=2)
+# Actual vs Residuals — :
+# • Points are centered near 0 ⇒ average error ≈ 0.
+# • Spread gets wider at higher actual values ⇒ non-constant variance (heteroskedasticity).
+# • Clusters around ~60, ~95–125, ~135+ ⇒ level/regime shifts not fully captured.
+# • A few extreme points (both signs) ⇒ outliers/shocks.
+# ⇒ Errors aren’t homoscedastic or fully random; consider a model with trend/variance handling.
+
+
+# 5) ACF of residuals (look for bars within bounds ⇒ uncorrelated)
+Acf(res, lag.max=48, main="ACF of residuals")
+# ACF of residuals — short read:
+# • Big positive spikes at very small lags (1–3) ⇒ residuals are autocorrelated (not white noise).
+# • Clear negative block around ~20–26 ⇒ leftover medium-lag structure.
+# • Small bump near ~35–38 ⇒ possible longer cycle/seasonal remnant.
+# ⇒ Holt–Winters still misses dependence; consider refining (e.g., damped trend/ARMA errors) and recheck.
+
+
+# Five accuracy measures for Holt–Winters (additive)
+library(forecast)
+fc <- hw(y, seasonal = "additive", h = 12)
+round(accuracy(fc)[1, c("ME","RMSE","MAE","MAPE","MASE")], 4)
+
+# ---- Accuracy output (Holt–Winters) — explanation  ----
+# ME   = 0.0059   # Avg signed error ≈ 0 → forecasts are unbiased on average.
+# RMSE = 2.4230   # Root-mean-squared error ≈ 2.42 index points (penalizes big misses).
+# MAE  = 1.5424   # Average absolute miss ≈ 1.54 index points.
+# MAPE = 1.6639%  # Average percent error ≈ 1.66% (easy to interpret).
+# MASE = 0.1546   # Error is ~15% of the naïve benchmark → **much better than naïve** (MASE < 1).
+# Takeaway: Accuracy is strong, especially given the very low MASE.
+
+# Simple: Holt–Winters next 12 months — table + plot
+library(forecast)
+
+fc <- hw(y, seasonal = "additive", h = 12)
+
+future_dates <- seq(max(df2$Date), by = "month", length.out = 13)[-1]
+print(data.frame(Date = as.Date(format(future_dates, "%Y-%m-01")),
+                 Forecast = round(as.numeric(fc$mean), 2)))
+ print(data.frame(Date = as.Date(format(future_dates, "%Y-%m-01")),
+                  Forecast = round(as.numeric(fc$mean), 2)))
+#         Date Forecast
+#1  2025-09-01   131.19
+#2  2025-10-01   131.35
+#3  2025-11-01   132.25
+#4  2025-12-01   132.28
+#5  2026-01-01   132.75
+#6  2026-02-01   134.14
+#7  2026-03-01   135.07
+#8  2026-04-01   135.41
+#9  2026-05-01   136.22
+#10 2026-06-01   136.52
+#11 2026-07-01   136.70
+#12 2026-08-01   136.90
+
+plot(fc, main = "Holt–Winters: Next 12 Months", ylab = "Food Price Index", xlab = "Time")
+# Holt–Winters forecast — next 12 months (short read):
+# • Black line: historical Food Price Index.
+# • Blue line: HW point forecast (level + trend + seasonality).
+# • Shaded bands: 80% (dark) and 95% (light) prediction intervals → widen with horizon.
+# • Pattern: forecast continues recent upward level and repeats seasonal shape.
+# • Takeaway: captures trend/seasonality better than naïve/SES, but uncertainty is sizable.
+
+# -------- Summary: Holt–Winters (additive) --------
+# • Accuracy: ME≈0 (unbiased), RMSE≈2.42, MAE≈1.54, MAPE≈1.66%.
+#   MASE≈0.155 → far better than naïve (good baseline performance).
+#
+# • 1-year prediction: the point forecast 12 months ahead is the last value
+#   in the HW forecast vector.
+#   # print it:
+#   tail(as.numeric(fc$mean), 1)
+#
+# • Other observations:
+#   - α≈1.00 → level reacts almost fully to the newest data.
+#   - β≈0.14 → trend updates moderately.
+#   - γ≈0.00 → seasonal pattern treated as nearly fixed.
+#   - Residual checks show autocorrelation/heteroskedasticity + a few outliers,
+#     so there’s still structure/volatility not fully captured; intervals widen with horizon.
+
+#Q7)Accuracy Summary
+#• Show a table of all the forecast methods above with their accuracy measures.
+#• Separately define each forecast method and why it is useful. Show the best and worst
+#forecast method for each of the accuracy measures
+
+
+
+
+
+#Accuracy Summary
+
+# SIMPLE accuracy summary: Naive, SES, Holt–Winters (+ best/worst per metric)
+library(forecast)
+
+# assume monthly ts `y` already exists (freq=12)
+
+m_naive <- naive(y)
+m_ses   <- ets(y, model = "ANN")
+m_hw    <- hw(y, seasonal = "additive", h = 12)
+
+ACC <- rbind(
+  Naive = accuracy(m_naive)[1, c("ME","RMSE","MAE","MAPE","MASE")],
+  SES   = accuracy(m_ses  )[1, c("ME","RMSE","MAE","MAPE","MASE")],
+  HW    = accuracy(m_hw   )[1, c("ME","RMSE","MAE","MAPE","MASE")]
+)
+ACC <- round(ACC, 4); print(ACC)
+
+# ---------------- Accuracy Summary (Output) ----------------
+# Output (your table):
+# Method   ME      RMSE    MAE     MAPE     MASE
+# Naive    0.1539  2.5011  1.6162  1.7378%  0.1620
+# SES      0.1535  2.4983  1.6125  1.7338%  0.1617
+# HW       0.0059  2.4230  1.5424  1.6639%  0.1546
+#
+# What this means:
+# • Best overall: Holt–Winters (HW). It has the LOWEST RMSE, MAE, MAPE, and MASE.
+#   → Smallest typical errors; MASE = 0.1546 means ~15% of naïve error (much better than baseline).
+# • Naïve vs SES: SES is only slightly better than Naïve (tiny differences in RMSE/MAE/MAPE/MASE).
+#   → Level-only smoothing doesn’t add much for this series.
+# • ME (bias): All near 0; HW is closest to zero (0.0059) → forecasts are roughly unbiased.
+# • Recommendation: Choose HW as the best model for this dataset.
+# ------------------------------------------------------------------------------------------
+
+# ------------------- Methods: what they are & why useful -------------------
+# Naïve
+# - Definition: Forecast t+1 equals the last observed value at t (flat step-ahead).
+# - Useful when: Series behaves like a random walk / very persistent level; also a
+#   baseline every model should beat (easy to explain, zero tuning).
+
+# Simple Exponential Smoothing (SES, ETS ANN)
+# - Definition: Smooths the LEVEL only with weight α on the newest data (no trend/seasonality).
+# - Useful when: No clear trend or seasonality but you want to damp short-term noise
+#   while tracking level changes.
+
+# Holt–Winters 
+# - Definition: Exponential smoothing with LEVEL + TREND + SEASONALITY components.
+# - Useful when: Both trend and (additive) seasonal pattern are present; adapts each
+#   component over time and generally outperforms Naïve/SES on such series.
+
+# ------------------- Best vs. Worst by metric (from table) -------------------
+# Given:
+# Method   ME      RMSE    MAE     MAPE     MASE
+# Naive    0.1539  2.5011  1.6162  1.7378%  0.1620
+# SES      0.1535  2.4983  1.6125  1.7338%  0.1617
+# HW       0.0059  2.4230  1.5424  1.6639%  0.1546
+
+# Lower is better for all five metrics here.
+
+# ME (bias):
+# - Best (closest to 0): HW (0.0059)
+# - Worst: Naive (0.1539)  # SES is slightly better than Naive (0.1535)
+
+# RMSE:
+# - Best: HW (2.4230)
+# - Worst: Naive (2.5011)
+
+# MAE:
+# - Best: HW (1.5424)
+# - Worst: Naive (1.6162)
+
+# MAPE:
+# - Best: HW (1.6639%)
+# - Worst: Naive (1.7378%)
+
+# MASE:
+# - Best: HW (0.1546)
+# - Worst: Naive (0.1620)
+
+# ------------------- takeaway -------------------
+# Holt–Winters is the best across all accuracy measures; SES is a tiny improvement
+# over Naïve; Naïve is the consistent worst (as expected for a nontrivial series).
+
+
+#Q8)Conclusion
+#• Summarize your analysis of the time series values over the time period.
+#• Based on your analysis and forecast above, do you think the value of the time series will
+#increase, decrease, or stay flat over the next year? How about the next 2 years?
+#• Rank forecasting methods for this time series based on historical values.
+
+
+
+#CONCLUSION
+
+# ---------------- Time Series Summary — FAO Food Price Index ----------------
+# Level & Trend:
+# • Early years (1990s): low/stable levels (~55–80).
+# • 2006–2011: sharp run-up with two major peaks (≈2008 and ≈2011), then a drop.
+# • 2012–2019: mostly sideways to gently down, stabilizing around ~90–110.
+# • 2020–2022: steep surge to the series high (~2022), then a pullback and partial rebound.
+
+# Volatility:
+# • Calm in the 1990s; much higher volatility from mid-2000s onward.
+# • Big, abrupt moves during crisis periods; quieter stretches between peaks.
+
+# Seasonality:
+# • Any seasonal pattern is weak relative to level shifts and trend; the signal is
+#   dominated by medium-to-long swings rather than regular monthly cycles.
+
+# Autocorrelation / Persistence:
+# • Strong persistence (ACF decays slowly), indicating non-stationary behavior and
+#   long memory in the level.
+
+# Modeling Implications:
+# • Mean or SES alone underfit; trend/seasonal structure is needed.
+# • Holt–Winters/ETS with trend (and additive seasonality if present) fits best among
+#   simple Lec2/Lec4 methods; residual checks still matter due to heteroskedasticity/outliers.
+
+# Practical Takeaway:
+# • The index moves in regimes: long upswings and downswings with episodic spikes.
+#   Forecasts should allow for changing level/trend and communicate uncertainty clearly.
+# ---------------------------------------------------------------------------
+
+
+
+
+
+
+#— Direction of the series
+# Next 1 year: Slight increase.
+# - My Holt–Winters (additive) forecast continues the recent upward level and repeats
+#   the seasonal pattern. HW had the best accuracy (lowest RMSE/MAE/MAPE/MASE), so I
+#   trust this direction more than naïve/SES.
+#
+# Next 2 years: Modest upward drift, but low confidence.
+# - The forecast still trends up on average, but the prediction bands widen a lot by
+#   year 2. Residual checks showed some autocorrelation/heteroskedasticity, so shocks
+#   could pull the series off this path.
+#
+# Bottom line: Upward bias in the central forecast for 12–24 months, with increasing
+# uncertainty the further out we go.
+
+
+#Rank forecasting methods for this time series based on historical values.
+# Ranking of forecasting methods (based on historical accuracy for THIS series)
+# Criteria: prioritize lower MASE (scale-free vs naïve), then RMSE/MAE as tie-breakers.
+
+# 1) Best: Holt–Winters (additive)
+#    - Lowest MASE (0.1546) and lowest RMSE/MAE/MAPE → strongest overall fit.
+
+# 2) Middle: SES (Simple Exponential Smoothing)
+#    - Very close to Naïve but slightly better on all metrics (tiny edge in RMSE/MAE/MASE).
+
+# 3) Worst: Naïve
+#    - Highest errors among the three; useful only as a baseline to beat.
+
+# One-line order (best → worst):  Holt–Winters  >  SES  >  Naïve
+
+
+
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

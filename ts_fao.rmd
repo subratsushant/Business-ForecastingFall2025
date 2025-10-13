@@ -1,0 +1,268 @@
+---
+title: "ts_fao"
+output: html_document
+date: "2025-10-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+  
+library(readr)
+df <- read_csv("/Users/subratsushant/Documents/r_programming/upload food.csv")
+head(df); 
+str(df)
+library(fpp2)
+# make clean 2-column data, parse YYYY-MM → Date(1st), sort, collapse duplicates
+df2 <- df[, c("Date","Food Price Index")]
+df2$Date <- as.Date(paste0(trimws(df2$Date), "-01"))
+df2 <- aggregate(`Food Price Index` ~ Date, df2, mean)
+df2 <- df2[order(df2$Date), ]
+
+# plot
+plot(df2$Date, df2$`Food Price Index`, type = "l",
+     xlab = "Date", ylab = "Food Price Index")
+
+library(forecast)
+
+# y = monthly ts from df2
+y <- ts(df2$`Food Price Index`[order(df2$Date)], frequency = 12)
+
+# ACF of value series only
+Acf(y, lag.max = 48, main = "ACF — Food Price Index (monthly)")
+
+# --- What you are seeing (plain-English notes) ---
+# Big bars at small lags (1–5) with slow decay:
+#   -> Adjacent months are very similar; correlations persist across several lags.
+#   -> This persistence indicates a trend / non-stationarity in the level of the series.
+
+# Tall spikes near lags 12, 24, 36:
+#   -> Strong correlation every 12 months.
+#   -> That is classic annual seasonality in monthly data (repeatable yearly pattern).
+
+# Blue dashed lines:
+#   -> About ±1.96/sqrt(N); they are ~95% significance limits.
+#   -> Bars crossing these lines are statistically significant autocorrelations
+#      (unlikely to be just random noise).
+
+
+library(forecast)
+
+# build monthly ts from df2
+y <- ts(df2$`Food Price Index`[order(df2$Date)], frequency = 12)
+
+# use your exact sequence on df2
+tmp <- HoltWinters(y)
+# What the Holt–Winters filtering plot shows (read these while viewing your plot):
+# - BLACK line = observed Food Price Index (monthly data).
+# - RED line   = fitted values from the Holt–Winters model:
+#                y_hat_t = level_t + trend_t + seasonal_t  (additive by default).
+#
+# - Tall up-and-down waves = the model’s 12-month seasonal component.
+#   It repeats annually and explains regular within-year rises/falls.
+#
+# - The slow movement of the red curve across years = the estimated TREND
+#   (level + slope). It follows the long-run climb/drop in the index.
+#
+# - Where red and black overlap closely → good in-sample fit.
+#   Long runs with red above/below black → possible bias or missing structure.
+#
+# - If the seasonal wiggles look too “spiky”, try multiplicative seasonality:
+#     tmp <- HoltWinters(y, seasonal = "multiplicative")
+#
+# - Always validate the fit with residual diagnostics:
+#     plot(tmp_f$residuals)     # should fluctuate around 0 with constant spread
+#     hist(tmp_f$residuals)     # roughly bell-shaped
+#     Acf(tmp_f$residuals)      # no big spikes (≈ white noise)
+#   If spikes remain (esp. at lag 12), consider ETS(y) or auto.arima(y).
+
+
+
+attributes(tmp)
+plot(tmp)
+tmp_f <- forecast(tmp)
+attributes(tmp_f)
+plot(tmp_f$residuals)
+hist(tmp_f$residuals)
+Acf(tmp_f$residuals)
+# ACF of residuals — how to read this plot:
+# - Goal: residuals should look like WHITE NOISE (all bars inside blue bands, no structure).
+# - Here, large positive bars at small lags (1–3) → residuals are still autocorrelated.
+#   -> The model hasn’t removed all short-term dependence.
+# - Notice a cluster of spikes near lag ~12 (and around seasonal multiples):
+#   -> remaining yearly seasonality; seasonal pattern not fully captured.
+# - Long run of negative bars after early positives:
+#   -> typical of an under/over-smoothed trend component.
+accuracy(tmp_f)
+
+
+
+library(fpp2)
+library(TTR)
+
+
+# build monthly ts from df2, then run your commands
+y <- ts(df2$`Food Price Index`[order(df2$Date)], frequency = 12)
+
+attributes(y)
+plot(y)
+Acf(y)
+# ACF for df2$`Food Price Index` (monthly) — how to read this plot:
+# - Big positive bars at small lags (1–5) with slow decay:
+#     -> strong persistence / trend; the series is NON-stationary in level.
+# - Clear spikes near lags 12, 24 (and echoes beyond):
+#     -> annual SEASONALITY (monthly data repeats every 12 months).
+# - Bars crossing the blue dashed lines:
+#     -> statistically significant autocorrelations (not just noise).
+
+#take Mean of all available history
+
+mean_forecast <- meanf(y,5)
+plot(mean_forecast)
+
+# Naive
+naive_forecast <- naive(y,5)
+plot(naive_forecast)
+
+# Random Walk
+rwf_forecast <- rwf(y,5)
+rwf_forecast <- rwf(y,5, drift=TRUE)
+
+# Seasonal Naive
+snaive_forecast <- snaive(y,5)
+
+# Moving Averages
+
+MA5_forecast <- ma(y,order=5)
+MA9_forecast <- ma(y,order=9)
+
+
+# plot all in a single chart
+plot(mean_forecast)
+lines(naive_forecast$mean,col="red")
+lines(rwf_forecast$mean,col="green")
+lines(snaive_forecast$mean,col="black")
+lines(MA5_forecast,col="Pink")
+lines(MA9_forecast,col="Blue")
+ # ------------------------------------------------------------
+# What this plot shows (RStudio “Forecasts from Mean”)
+#
+# Title:
+#   "Forecasts from Mean" — you plotted a mean-forecast object (e.g., meanf(y, h)).
+#
+# Axes:
+#   x-axis = time index of your series.
+#   y-axis = value/level of the series (same units as your data).
+#
+# Colors / elements:
+#   • Black zig-zag line = the ORIGINAL historical data (training sample).
+#       - This is just your raw time series over time.
+#
+#   • Blue line (to the right of the history) = POINT FORECASTS from the Mean model.
+#       - For a mean forecast, all future points are a flat line at the
+#         sample mean of the training data (no trend/seasonality learned).
+#
+#   • Shaded bands around the blue line = PREDICTION INTERVALS.
+#       - Inner band = 80% prediction interval (narrower).
+#       - Outer band = 95% prediction interval (wider).
+#       - The inner band is the darker shade; the outer band is the lighter shade
+#         that extends further from the blue forecast line.
+#
+#   • (Sometimes) a thin pink/rose line over the history = FITTED values
+#     (in-sample one-step-ahead forecasts). If visible, it tracks the data but 
+#     won’t match spikes perfectly; it’s optional depending on what you plotted.
+#
+#   • The tall grey bar at the far right edge is the RStudio Viewer scrollbar —
+#     it’s part of the UI, NOT part of the forecast graphic.
+#
+# Interpretation tips (for this specific mean model):
+#   - Because this is a “mean” model, the blue forecast is flat (no trend/seasonality).
+#   - The interval bands widen slightly with horizon because future uncertainty
+#     accumulates.
+#   - If your historical series has big spikes (seen in the black line), the mean
+#     model will not reproduce them; it assumes future = constant average level.
+#
+
+# ------------------------------------------------------------
+
+
+# what other attributes are there?
+attributes(naive_forecast)
+
+
+# Decomposition
+ets_forecast <- ets(y)
+plot(ets_forecast)
+attributes(ets_forecast)
+ets_forecast$mse
+# HoltWinters
+HW_forecast <- HoltWinters(y)
+
+
+SSE_Simple <- HoltWinters(y,beta=FALSE,gamma=FALSE)
+attributes(SSE_Simple)
+plot(SSE_Simple)
+SSE_Simple$SSE
+head(SSE_Simple$fitted)
+
+#Forecast
+forecast_ets_1 <- forecast.ets(ets_forecast, h=5)
+plot(forecast_ets_1)
+forecast_ets_2 <- forecast(ets_forecast, h=5)
+plot(forecast_ets_2)
+
+
+#Accuracy
+accuracy(forecast_ets_1)
+accuracy(forecast_ets_2)
+
+# ------------------------------------------------------------
+# Metric choice: MASE is the best single number to judge by here.
+# Why MASE?
+# - It’s scale-free (comparable across different series/units).
+# - It’s benchmarked against a naïve (or seasonal-naïve) forecast,
+#   so you instantly know if you’re beating “do-nothing.”
+# - Rule of thumb: MASE < 1 = better than naïve (good).
+#                  MASE > 1 = worse (bad).
+# - In your result, MASE = 0.742, so this model beats the naïve
+#   benchmark on average.
+#
+# How the others fit in:
+# - RMSE and MAE: good for ranking models on the same series.
+#   RMSE penalizes big errors more; MAE is more robust to outliers.
+#   Both depend on units, so not cross-series comparable.
+# - MAPE/MPE: percent-based and easy to explain, but unstable with
+#   values near zero and biased toward under-forecasting when scale changes.
+# - ME: can hide big misses (positives and negatives cancel). Not a good
+#   sole criterion.
+# - ACF1: not an “accuracy” metric—it's a diagnostic. Yours (0.627) flags
+#   autocorrelated residuals, meaning the model likely misses structure
+#   even though MASE looks good. You should refine the model before
+#   trusting intervals.
+# ------------------------------------------------------------
+
+
+
+
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

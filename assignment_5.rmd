@@ -1,0 +1,70 @@
+---
+title: "assignment 5"
+output: html_document
+date: "2025-10-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+#Assignment 5 Decomposition
+
+
+
+library(readr)
+library(forecast)
+
+# 1) Load data (use your path or put the CSV next to the Rmd and change the name)
+df <- read_csv("/Users/subratsushant/Documents/r_programming/upload food.csv")
+
+# 2) Keep needed columns and make monthly Date
+df2 <- df[, c("Date", "Food Price Index")]
+df2$Date <- as.Date(paste0(trimws(df2$Date), "-01"))
+df2 <- aggregate(`Food Price Index` ~ Date, df2, mean)
+df2 <- df2[order(df2$Date), ]
+
+# 3) Make monthly time series (fill tiny gaps if any)
+y  <- ts(df2$`Food Price Index`, frequency = 12,
+         start = c(as.integer(format(min(df2$Date), "%Y")),
+                   as.integer(format(min(df2$Date), "%m"))))
+y  <- na.interp(y)  # simple, safe
+
+# 4) STL decomposition + seasonal adjustment
+stl_decomp <- stl(y, s.window = "periodic")
+plot(stl_decomp, main = "STL Decomposition")
+
+plot(y, main = "Raw vs Seasonally Adjusted (STL)", ylab = "Index", xlab = "Time")
+lines(seasadj(stl_decomp), col = "red", lwd = 2)
+
+# 5) STL forecast (15 months)
+f_stl <- forecast(stl_decomp, h = 15)
+plot(f_stl, main = "STL Forecast (h = 15)")
+f_stl
+
+# 6) Classical decomposition (additive) + seasonal adjustment
+decomp_fpi <- decompose(y, type = "additive")
+plot(decomp_fpi)  
+
+
+# Print classical seasonally adjusted series
+seasadj(decomp_fpi)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

@@ -1,0 +1,186 @@
+---
+title: "mid_term_prac_decomposition"
+output: html_document
+date: "2025-10-20"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+# --- Minimal Decomposition on your Food Price Index ---
+
+# If needed: install.packages("forecast")
+library(forecast)
+
+# 1) LOAD + PREP (assumes "Date" like YYYY-MM and "Food Price Index")
+df  <- read.csv("/Users/subratsushant/Documents/r_programming/upload food.csv", check.names = FALSE)
+df2 <- df[, c("Date", "Food Price Index")]
+df2$Date <- as.Date(paste0(trimws(df2$Date), "-01"))
+df2 <- aggregate(`Food Price Index` ~ Date, df2, mean, na.rm = TRUE)
+df2 <- df2[order(df2$Date), ]
+
+# monthly ts
+y <- ts(df2$`Food Price Index`, frequency = 12,
+        start = c(as.integer(format(min(df2$Date), "%Y")),
+                  as.integer(format(min(df2$Date), "%m"))))
+y <- na.interp(y)
+
+# 2) PLOT DECOMPOSITION (classical additive)
+decomp_add <- decompose(y, type = "additive")
+plot(decomp_add)   # <- shows trend / seasonal / remainder
+
+# 3) IS IT SEASONAL? (simple check: seasonal sd > 0)
+is_seasonal <- sd(decomp_add$seasonal, na.rm = TRUE) > 1e-8
+cat("Seasonal? ", is_seasonal, "\n")
+
+# 4) ADDITIVE vs MULTIPLICATIVE (pick smaller remainder SD)
+decomp_mul <- decompose(y, type = "multiplicative")
+sd_add <- sd(decomp_add$random, na.rm = TRUE)
+sd_mul <- sd(decomp_mul$random, na.rm = TRUE)
+choice <- if (sd_mul < sd_add) "multiplicative" else "additive"
+cat("Chosen decomposition: ", choice, "\n")
+
+# 5) SEASONAL MONTHLY INDICES (by chosen model)
+if (choice == "additive") {
+  idx <- tapply(decomp_add$seasonal, cycle(y), mean, na.rm = TRUE)
+  seasonal_table <- data.frame(Month = month.abb, Seasonal_Index = round(as.numeric(idx), 2))
+} else {
+  idx <- tapply(decomp_mul$seasonal, cycle(y), mean, na.rm = TRUE)
+  seasonal_table <- data.frame(Month = month.abb,
+                               Seasonal_Factor = round(as.numeric(idx), 3),
+                               Percent_vs_Avg = round((as.numeric(idx) - 1)*100, 1))
+}
+print(seasonal_table, row.names = FALSE)
+
+# 6) WHICH MONTH IS HIGH / LOW?
+if (choice == "additive") {
+  hi <- which.max(seasonal_table$Seasonal_Index)
+  lo <- which.min(seasonal_table$Seasonal_Index)
+  cat("Highest month:", seasonal_table$Month[hi], " | index =", seasonal_table$Seasonal_Index[hi], "\n")
+  cat("Lowest  month:", seasonal_table$Month[lo], " | index =", seasonal_table$Seasonal_Index[lo], "\n")
+} else {
+  hi <- which.max(seasonal_table$Seasonal_Factor)
+  lo <- which.min(seasonal_table$Seasonal_Factor)
+  cat("Highest month:", seasonal_table$Month[hi], " | factor =", seasonal_table$Seasonal_Factor[hi], 
+      " (", seasonal_table$Percent_vs_Avg[hi], "%)\n", sep = "")
+  cat("Lowest  month:", seasonal_table$Month[lo], " | factor =", seasonal_table$Seasonal_Factor[lo], 
+      " (", seasonal_table$Percent_vs_Avg[lo], "%)\n", sep = "")
+}
+# --- Assignment: Reasons for High (Mar) and Low (Aug) Seasonal Values ---
+# Student notes (brief, plain-English):
+
+# Overall:
+# - The seasonal effect is very small (~ +0.6% in March, ~ -0.4% in August),
+#   so these are gentle tendencies, not big swings.
+
+# Possible reasons:
+# 1) Crop/harvest timing (supply):
+#    - Northern Hemisphere harvests arrive late summer/early fall.
+#    - More supply around that time can nudge prices lower in August.
+#    - Earlier in the year (late winter → early spring), stocks are tighter
+#      before new crops, slightly lifting prices in March.
+
+# 2) Energy & logistics costs:
+#    - Winter weather + higher heating/transport costs raise production/shipping costs.
+#    - Cost pass-throughs often show up by late winter/early spring (March).
+#    - In summer (August), smoother logistics and lower fuel premiums ease prices a bit.
+
+# 3) Holiday/demand pulses:
+#    - Some years Ramadan/Easter fall in Mar–Apr, temporarily boosting demand
+#      (e.g., sugar, oils, meat), giving March a small upward push.
+
+# 4) Contract/policy cycles:
+#    - Many procurement/trade terms reset in Q1, sometimes firming prices early in the year.
+#    - By mid-year, markets typically adjust.
+
+# 5) Mixed basket effect (FAO FPI is an aggregate):
+#    - The index blends cereals, vegetable oils, dairy, meat, and sugar.
+#    - Small seasonal moves are the net result across these components.
+
+# Conclusion:
+# - Seasonality is modest (<1%), so overall trend and shocks (weather, geopolitics,
+#   policy changes) likely matter more than month-to-month seasonality.
+
+
+# 7) SEASONALLY ADJUSTED PLOT (overlay with actuals)
+y_sa <- if (choice == "additive") seasadj(decomp_add) else seasadj(decomp_mul)
+plot(y, main = "Actual vs Seasonally Adjusted", xlab = "Time", ylab = "Index")
+lines(y_sa, col = "red", lwd = 2)
+legend("topleft", c("Actual", "Seasonally Adjusted"), lty = 1, col = c("black","red"), bty = "n")
+
+# 8) DOES SEASONALITY HAVE BIG FLUCTUATIONS?
+if (choice == "additive") {
+  s <- as.numeric(tapply(decomp_add$seasonal, cycle(y), mean, na.rm = TRUE))
+  amp_abs <- max(s) - min(s)
+  amp_rel <- 100 * amp_abs / mean(y, na.rm = TRUE)
+  cat("Seasonal amplitude (additive): ", round(amp_abs, 2), 
+      " points ≈ ", round(amp_rel, 1), "% of mean level.\n", sep = "")
+} else {
+  s <- as.numeric(tapply(decomp_mul$seasonal, cycle(y), mean, na.rm = TRUE))
+  peak_to_trough_ratio <- max(s) / min(s)
+  cat("Seasonal amplitude (multiplicative): peak/min factor = ",
+      round(peak_to_trough_ratio, 3), "\n", sep = "")
+}
+
+# Seasonality size :
+# Peak/min factor ≈ 1.01 → ~1% total swing (about ±0.5% around average).
+# This is NOT a big fluctuation; seasonality is mild compared to trend/noise.
+
+  
+
+
+# ---------------- Plot Explanation: "Actual vs Seasonally Adjusted" ----------------
+# What this figure shows:
+# - Title: "Actual vs Seasonally Adjusted"
+# - X-axis = Time (monthly). Y-axis = FAO Food Price Index (level).
+# - Legend indicates two series:
+#     • "Actual" (black)
+#     • "Seasonally Adjusted" (red)
+# - In the image the red line sits almost exactly on top of the black line, so the black
+#   "Actual" line is mostly hidden. This visual overlap implies seasonality is VERY small.
+
+# Key takeaways from the picture:
+# 1) Seasonality is negligible:
+#    - Because the seasonally adjusted series (red) is basically the same as the actuals,
+#      removing the seasonal component barely changes the line. This matches the numeric
+#      result (~1% peak-to-trough seasonal swing).
+#
+# 2) Big movements are trend/level shifts and shocks, not month effects:
+#    - 1990s → mild downtrend/sideways, trough around ~1999–2002.
+#    - 2002–2008 → strong climb culminating in a sharp spike; crash in 2008–09.
+#    - 2010–2011 → another surge/spike, then step down and choppy decline into ~2015–2016.
+#    - 2021–2022 → very steep run-up to the all-time high (~160+), followed by a pullback in 2023
+#      and a partial rebound into 2024–2025.
+#    - These swings dwarf the tiny seasonal pattern, reinforcing that shocks/trend dominate.
+#
+# 3) Modeling implication:
+#    - Since seasonality is weak, forecasting should focus on level/trend and volatility
+#      (e.g., ETS with changing level or ARIMA with differencing), rather than heavy
+#      seasonal structure. External shocks (energy, weather, policy) likely explain the
+#      large jumps more than month-of-year effects.
+
+# Optional plotting tip (if you want to see the black "Actual" line clearly):
+# plot(y, main="Actual vs Seasonally Adjusted", xlab="Time", ylab="Index", col="black")
+# lines(y_sa, col="red", lwd=2)
+# legend("topleft", c("Actual","Seasonally Adjusted"), lty=1, col=c("black","red"), bty="n")
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

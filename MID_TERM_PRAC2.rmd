@@ -1,0 +1,901 @@
+---
+title: "another_midterm_prac"
+output: html_document
+date: "2025-10-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r }
+
+
+
+library(readr)
+TRANSIT <- read_csv("/Users/subratsushant/Downloads/TRANSIT.csv")
+Transit_Raw <- TRANSIT$TRANSIT
+Transit_ts <- ts(Transit_Raw, frequency = 12, start = c(2000,1))
+plot(Transit_ts)
+
+#Q1)Plot and Inference
+#• Show a time series plot.
+#• Please summaries your observations of the times series plot
+
+#1) Time series plot
+plot(Transit_ts,
+     main = "Transit Ridership (Monthly)",
+     xlab = "Year", ylab = "Ridership", col = "gray30")
+grid()
+
+# --- Plot & Inference: Transit Ridership (Monthly) ---
+# Span: 2000–2024 monthly; pre-2020 level mostly ~0.75–0.95M riders.
+# Seasonality: clear yearly peaks/troughs; amplitude grows with level → multiplicative-type seasonality.
+# Trend (pre-2020): mild rise early 2000s, then flat/slight decline after ~2014.
+# Structural break: sharp collapse in early 2020 (COVID) ≈ step change/outlier cluster.
+# Recovery: 2021–2024 steady rebound (~0.55–0.65M) but still below pre-2020 baseline.
+# Variability: larger at higher levels → consider log scale or multiplicative models.
+# Modeling note: handle the 2020 break (e.g., intervention/segmented period) and prefer ETS/Holt-Winters (multiplicative) or log-ETS.
+
+
+#Q2)Central Tendency
+# What are the min, max, mean, median, 1st and 3rd Quartile values of the times series?
+# Show the box plot.
+# Can you summarize your observation about the time series from the summary stats and
+#box plot?
+
+
+
+
+# 2---- Central Tendency + Boxplot ----
+# Summary stats
+stats <- summary(Transit_ts)  # Min, 1st Qu., Median, Mean, 3rd Qu., Max
+print(stats)
+
+# --- Summary (from stats) ---
+# Min = 171,450 | Q1 = 772,502 | Median = 824,766 | Mean = 779,435 | Q3 = 866,164 | Max = 993,437
+# • Center: Typical month ≈ 825k (median). Mean (779k) < median → slight left-skew.
+# • Spread: IQR = Q3 − Q1 = 866,164 − 772,502 = 93,662 (middle 50% sits ~772k–866k).
+# • Range: Max − Min = 993,437 − 171,450 = 821,987 (very wide due to extreme lows).
+# • Interpretation: Most months cluster around ~0.8–0.85M, with many unusually low months pulling the mean down (COVID-era outliers).
+
+
+# Box plot
+boxplot(Transit_ts,
+        main = "Transit Ridership — Boxplot",
+        horizontal = TRUE, xlab = "Ridership")
+grid()
+
+# --- Box plot summary ---
+# The box shows the middle 50% (IQR) of monthly ridership.
+# Many dots to the left = lots of low outliers (COVID-era months) → left-skew.
+# Typical month ≈ median; whiskers are the usual range; extreme lows are anomalies.
+# Modeling note: use robust summaries (Median/IQR) and handle the 2020 break.
+
+#Q3)Decomposition
+# Plot the decomposition of the time series.
+
+# ----- STL decomposition on series -----
+stl_decomp <- stl(Transit_ts, s.window = "periodic")
+
+# Seasonally adjusted series from STL
+library(forecast)
+seasadj(stl_decomp)
+
+
+# Show the plot for time series adjusted for seasonality. Overlay this with the line for
+#actual time series? Does seasonality have big fluctuations to the value of time series?
+# Plot actual + seasonally adjusted (red line)
+plot(Transit_ts, main = "Transit: Actual vs Seasonally Adjusted (STL)",
+     xlab = "Year", ylab = "Ridership")
+lines(seasadj(stl_decomp), col = "red")
+
+# --- Explanation: "Transit: Actual vs Seasonally Adjusted (STL)" ---
+# • Black = actual monthly ridership; Red = seasonally adjusted (SA) using STL.
+# • The red line removes the regular monthly pattern, so it shows the underlying level/trend.
+# • Where black deviates from red within a year = seasonal highs/lows (commute months vs holidays/weather).
+# • Pre-2020: gentle rise early 2000s → mostly flat/slight decline after ~2014.
+# • Early 2020: massive structural break (COVID) with a drop to ~20% of prior level.
+# • 2021–2024: steady recovery, but the SA level remains below the pre-2020 baseline.
+# • Seasonal swing appears proportional to level (smaller after the drop) → multiplicative-type seasonality.
+# • Modeling note: use multiplicative/log ETS or Holt-Winters with an intervention for 2020–2021.
+
+
+# Default horizon STL forecast
+f_stl <- forecast(stl_decomp)
+# Or specify horizon explicitly (e.g., 15 months)
+f_stl <- forecast(stl_decomp, h = 15)
+
+# Print and plot STL forecast
+f_stl
+plot(f_stl, main = "STL-based Forecast (Transit)")
+
+# --- Explanation: "STL-based Forecast (Transit)" ---
+# • Black = historical monthly ridership. Blue = STL forecast mean; dark/light gray bands = 80%/95% CIs.
+# • Forecast shape: modest upward movement with seasonal wiggles preserved from STL.
+# • Level: projected around ~0.55–0.65M over the next year, still below the pre-2020 baseline.
+# • Uncertainty: bands widen as horizon increases → growing forecast risk.
+# • Seasonality: periodic ups/downs continue in the forecast (same seasonal pattern learned from history).
+# • Caution: the COVID-era level shift means older pre-2020 data are a poor guide to current level—
+#   treat results as conditional on the post-2020 trajectory; intervention/segmented modeling may improve accuracy.
+
+
+# ----- Classical decomposition  -----
+decomp_trans <- decompose(Transit_ts)  # default additive
+
+# Inspect what it contains
+attributes(decomp_trans)
+
+# Seasonally adjusted series from classical decomposition
+seasadj(decomp_trans)
+
+
+
+# Is the times series seasonal?
+
+# Yes — the series is clearly seasonal.
+# Evidence: repeating peaks/troughs at a 12-month interval and a non-flat seasonal component in the STL/classical decompositions.
+# The seasonal swing scales with the level (stronger when ridership is high), suggesting multiplicative-type seasonality.
+
+
+# Is the decomposition additive or multiplicative?
+
+# Multiplicative (preferred).
+# Reason: the seasonal amplitude grows/shrinks with the level (post-2020 dip shows smaller swings),
+# and the log/STL or classical multiplicative decomposition leaves a smaller remainder than additive.
+
+
+
+# If seasonal, what are the values of the seasonal monthly indices?
+stl_add <- stl(Transit_ts, s.window = "periodic")
+stl_mul <- stl(log(Transit_ts), s.window = "periodic")
+
+si_add <- tapply(stl_add$time.series[, "seasonal"], cycle(Transit_ts), mean, na.rm=TRUE)
+si_mul <- exp(tapply(stl_mul$time.series[, "seasonal"], cycle(Transit_ts), mean, na.rm=TRUE))
+names(si_add) <- names(si_mul) <- month.abb
+round(si_add, 1); round(si_mul, 3)
+
+
+# --- Seasonal Monthly Indices (results) ---
+# Additive (riders +/- mean):
+# Jan -28,344 | Feb -44,993 | Mar +32,372 | Apr  -3,295
+# May +15,894 | Jun -10,193 | Jul -21,749 | Aug    -221
+# Sep +22,784 | Oct +70,050 | Nov  -2,441 | Dec  -29,864
+#
+# Multiplicative (× factor vs mean):
+# Jan 0.967 | Feb 0.947 | Mar 1.047 | Apr 0.975
+# May 1.006 | Jun 0.984 | Jul 0.974 | Aug 1.004
+# Sep 1.035 | Oct 1.097 | Nov 1.004 | Dec 0.969
+#
+# Quick read:
+# • Peak seasonal month: October (×1.097; +70k above mean in additive form).
+# • Trough seasonal month: February (×0.947; ~−45k below mean).
+# • Amplitude: peak/min ≈ 1.097 / 0.947 ≈ 1.158 → ~15.8% swing.
+#   (Additive swing ≈ 115,043 riders ≈ ~14.8% of the mean level.)
+# • Interpretation: strong, regular seasonality; effects scale with level → multiplicative is appropriate.
+
+
+# For which month is the value of time series high and for which month is it low?
+
+# Highest month: October (largest positive seasonal effect: +70k; multiplicative factor ≈ 1.097)
+# Lowest month:  February (largest negative seasonal effect: ~−45k; multiplicative factor ≈ 0.947)
+
+
+# Can you think of the reason behind the value being high in those months and low in
+#those months?
+# Likely reasons for peaks (Oct) and troughs (Feb):
+# • October (High): Work+schools in full session after summer; fewer holidays; mild weather → more commuting and discretionary trips.
+# • February (Low): Shortest month; harsh winter weather in many regions; sickness season; fewer events; lingering post-holiday slowdown.
+# • General: Transit demand follows work/academic calendars and weather; both amplify fall usage and depress mid-winter usage.
+
+
+#Q4)Naïve Method
+#• Output
+#• Perform Residual Analysis for this technique.
+#o Do a plot of residuals. What does the plot indicate?
+#o Do a Histogram plot of residuals. What does the plot indicate?
+#o Do a plot of fitted values vs. residuals. What does the plot indicate?
+#o Do a plot of actual values vs. residuals. What does the plot indicate?
+#o Do an ACF plot of the residuals? What does this plot indicate?
+
+# --- Naïve Method & Residual Analysis ---
+
+# 1) Fit Naïve and show output
+library(forecast)
+
+naive_fc <- naive(Transit_ts, h = 12)
+naive_fc                 # Output: point forecasts + 80/95% intervals
+plot(naive_fc, main = "Naïve Forecast (12 months)")  # Quick forecast plot
+
+# 2) Residuals
+res <- residuals(naive_fc)     # actual - one-step-ahead naive (lag-1) forecast
+fit <- fitted(naive_fc)        # in-sample naive fitted values (lagged series)
+
+# 3) Residual diagnostics plots
+par(mfrow = c(2, 3))
+
+# (a) Residuals over time
+plot(res, type="h", main="Residuals over Time", ylab="Residuals", xlab="Time"); abline(h=0, col="red")
+# What it indicates:
+# --- Residuals over Time (Naïve) —  ---
+# • Most residuals bounce around 0 → the naïve model captures a fair bit of short-run level.
+# • Clear structure remains: runs above/below 0 and repeating spikes → leftover seasonality/autocorrelation.
+# • Variance is not constant: larger swings pre-2020, smaller after the drop → heteroskedasticity.
+# • Huge negative spike in early 2020 = COVID shock the naïve model can’t anticipate (structural break).
+# • Takeaway: residuals are NOT white noise ⇒ naïve is an OK baseline but misses seasonality & the level shift.
+
+
+# (b) Histogram of residuals
+hist(res, main="Histogram of Residuals", xlab="Residuals")
+# What it indicates:
+# --- Histogram of Residuals (Naïve) —  ---
+# • Centered ~0 ⇒ forecasts are, on average, unbiased.
+# • Shape ≈ bell-shaped in the middle but with **heavy tails**:
+#   - a long **left tail** (few very large negatives from the 2020 shock),
+#   - some positive tail as well.
+# • Interpretation: residuals are not perfectly normal; outliers and level shifts inflate tails.
+# • Implication: naïve misses structural break/seasonality; robust or segmented models would behave better.
+
+
+# (c) Fitted vs Residuals
+plot(fit, res, main="Fitted vs Residuals", xlab="Fitted (Naïve)", ylab="Residuals"); abline(h=0, col="red")
+# What it indicates:
+# --- Fitted vs Residuals (Naïve)  ---
+# • Not a random “flat cloud”: clear structure/clusters → model misses features.
+# • Regime clusters: one cluster at high fitted (~0.8–1.0M; pre-2020) and another at lower fitted (post-2020),
+#   showing the level shift. Residuals around the break are strongly negative (big drop).
+# • Heteroskedasticity: spread changes with fitted value (funnel/unequal variance).
+# • Mild bias at higher fitted values (residuals skew slightly below 0) → systematic error.
+# • Takeaway: residuals are not iid; Naïve doesn’t capture seasonality or the 2020 level shift—use ETS/Holt-Winters (multiplicative/log) and/or include an intervention for 2020.
+
+
+# (d) Actual vs Residuals
+plot(naive_fc$x, res, main="Actual vs Residuals", xlab="Actual", ylab="Residuals"); abline(h=0, col="red")
+# What it indicates:
+# --- Actual vs Residuals (Naïve)  ---
+# • Clear pattern, not a random cloud: points cluster by regime.
+#   - Lower actuals (post-2020) → mostly negative residuals early in recovery.
+#   - Higher actuals (~0.8–1.0M, pre-2020) → wider spread and slight bias below 0.
+# • Heteroskedasticity: variance of residuals grows with the actual level (fan shape).
+# • Outliers: large negative spikes around the 2020 crash stand out.
+# • Takeaway: residuals aren’t iid—Naïve misses seasonality and the structural break.
+#   Use a multiplicative/log ETS or Holt-Winters with an intervention for 2020.
+
+
+# (e) ACF of residuals
+Acf(res, main="ACF of Residuals")
+# What it indicates:
+# --- ACF of Residuals (Naïve)  ---
+# • Any bar that crosses the blue bands is statistically significant (≠ 0 autocorrelation).
+# • We see noticeable positive spikes at small lags (e.g., lag 1) and around the seasonal lag (~12),
+#   meaning the residuals are still autocorrelated and some seasonality remains.
+# • Because residuals ≠ white noise, the naïve model is missing structure (seasonality/level shift).
+# • Implication: move to a seasonal model (ETS/Holt-Winters or SARIMA) and/or handle the 2020 break.
+
+
+
+#(f)Print the 5 measures of accuracy for this forecasting technique
+# --- Accuracy (Naïve) — print 5 key measures ---
+
+
+acc <- forecast::accuracy(naive_fc)              # training row = 1
+five <- acc[1, c("ME","RMSE","MAE","MAPE","MASE")]
+round(five, 3)
+
+# --- Naïve accuracy (results) ---
+# ME   =  -683.433   → near 0 (tiny negative bias; forecasts slightly low on average).
+# RMSE =  55,803.605 → typical squared-error scale; penalizes big misses (affected by 2020 shock).
+# MAE  =  41,483.851 → average absolute miss ≈ 41.5k riders.
+# MAPE =       6.063 → ~6.1% average percentage error (pretty reasonable for monthly transit).
+# MASE =       0.730 → < 1, so this model beats the seasonal naïve benchmark on average.
+# Takeaway: Naïve is a solid baseline with small bias and ~6% MAPE; still room to improve
+# (seasonality + 2020 break handling) if you need tighter errors.
+
+
+
+#Q5)Forecast
+# Time series value for next year. Show table and plot
+# --- Simple next-year forecast (auto model) ---
+library(forecast)
+
+fit <- ets(Transit_ts)        # automatic ETS (handles seasonality)
+fc  <- forecast(fit, h = 12)  # next 12 months
+
+# Table of next-year values
+future_months <- seq(as.Date(format(max(TRANSIT$DATE), "%Y-%m-01")), by = "month", length.out = 13)[-1]
+fc_table <- data.frame(Month = format(future_months, "%Y-%m"),
+                       Forecast = round(as.numeric(fc$mean), 0))
+print(fc_table, row.names = FALSE)
+
+# Plot
+plot(fc, main = "Next 12 Months Forecast", ylab = "Ridership")
+
+# --- What these six panels show  ---
+
+# [Top-Left] Residuals over Time
+# • Mostly around 0, but visible runs/patterns and a huge 2020 negative spike → not white noise.
+
+# [Top-Middle] Histogram of Residuals
+# • Centered near 0 but with heavy tails (especially left) → outliers/level shift inflate errors.
+
+# [Top-Right] Fitted vs Residuals
+# • Clusters by regime (pre- vs post-2020) and unequal spread → heteroskedasticity + missed structure.
+
+# [Bottom-Left] Actual vs Residuals
+# • Fan shape: variance grows with actual level; residuals not independent/identically distributed.
+
+# [Bottom-Middle] ACF of Residuals
+# • Significant spikes (lag 1 and ~12) → autocorrelation and remaining seasonality; residuals ≠ white noise.
+
+# [Bottom-Right] Next 12 Months Forecast
+# • Blue line = mean forecast; gray bands = 80/95% CIs.
+# • Modest upward trend with seasonal wiggles; level still below pre-2020 baseline; uncertainty widens with horizon.
+
+# Takeaway
+# • Naïve/straightforward models leave autocorrelation, seasonality, and heteroskedasticity.
+# • Prefer seasonal ETS/Holt-Winters (multiplicative/log) and handle the 2020 structural break for better accuracy.
+
+#Summarize this forecasting technique
+#o How good is the accuracy?
+#o What does it predict the value of time series will be in one year?
+#o Other observation
+
+
+
+fit <- ets(Transit_ts)
+fc  <- forecast(fit, h = 12)
+
+# Accuracy (in-sample): 5 key measures
+round(accuracy(fit)[, c("ME","RMSE","MAE","MAPE","MASE")], 3)
+
+# Predicted value exactly one year ahead 
+one_year_ahead <- as.numeric(tail(fc$mean, 1))
+one_year_ahead
+
+# --- Forecasting Technique: Summary ---
+# Accuracy (from ETS run):
+# • ME  = -892  → near-zero bias (slightly low on average).
+# • RMSE= 40,338; MAE= 25,687  → typical absolute miss ≈ 25.7k riders.
+# • MAPE= 4.10%  → strong accuracy for monthly transit.
+# • MASE= 0.452  → << 1, so this model clearly beats a seasonal-naïve baseline.
+
+# One-year-ahead value:
+# • Visual from your plot ≈ ~0.60M riders (use code below for the exact number).
+#   one_year_ahead <- as.numeric(tail(fc$mean, 1))  # prints the 12-step-ahead point forecast
+
+# Other observations:
+# • Model preserves seasonal ups/downs and shows a modest upward recovery,
+#   still below pre-2020 levels.
+# • Uncertainty bands widen with horizon (risk increases).
+# • Given multiplicative-type seasonality and the 2020 break, ETS/Holt-Winters on
+#   the (logged) series with an intervention/segmented training window is appropriate.
+
+
+#Q6)Simple Moving Averages
+#• Plot the graph for time series.
+#• Show the Simple Moving average of order 3 on the plot above in Red
+#• Show the Simple Moving average of order 6 on the plot above in Blue
+#• Show the Simple Moving average of order 9 on the plot above in Green
+#• (Bonus) show the forecast of next 12 months using one of the simple average order that
+#you feel works best for time series
+
+
+
+# Simple Moving Averages + quick 12-month forecast
+
+# SMAs (3, 6, 9)
+
+library(TTR)
+ma3 <- SMA(Transit_ts, n = 3)
+ma6 <- SMA(Transit_ts, n = 6)
+ma9 <- SMA(Transit_ts, n = 9)
+
+# Plot with overlays
+plot(Transit_ts, main="Transit: SMA(3)=Red, SMA(6)=Blue, SMA(9)=Green",
+     xlab="Year", ylab="Ridership", col="gray30")
+grid(); lines(ma3, col="red", lwd=2); lines(ma6, col="blue", lwd=2); lines(ma9, col="green", lwd=2)
+
+
+# Bonus: forecast next 12 months using SMA(9) level (flat)
+k <- 9
+lvl <- mean(tail(Transit_ts, k), na.rm=TRUE)
+e  <- end(Transit_ts); start_fc <- c(e[1] + (e[2]==12), ifelse(e[2]==12, 1, e[2]+1))
+fc_ts <- ts(rep(lvl, 12), frequency=12, start=start_fc)
+
+plot(Transit_ts, main="SMA(9) Flat Forecast — Next 12 Months",
+     xlab="Year", ylab="Ridership", col="gray40")
+lines(fc_ts, col="green", lwd=2)
+
+
+# --- What the two  plots show ---
+
+#  "Transit: SMA(3)=Red, SMA(6)=Blue, SMA(9)=Green"
+# • Gray = actual monthly ridership.
+# • SMA(3) (red): reacts fastest, least smoothing → follows bumps closely.
+# • SMA(6) (blue): smoother than SMA(3); balances noise vs responsiveness.
+# • SMA(9) (green): smoothest but lags turning points the most.
+# • After the 2020 drop, all SMAs recover; larger n responds slower but gives a cleaner trend view.
+
+# "SMA(9) Flat Forecast — Next 12 Months"
+# • Green segment = simple flat forecast: the next 12 months are set to the
+#   average of the last 9 months (no extra trend or seasonality added).
+# • It’s an easy baseline: stable but will under-react if the true level is still rising.
+
+
+# Observations as MA order increases (3 → 6 → 9):
+# • Smoother line: higher n removes more month-to-month noise.
+# • More lag: peaks/troughs occur later; turning points are delayed.
+# • Smaller seasonal swing: amplitude shrinks as n grows.
+# • Better trend view, worse responsiveness: long-run level clearer, short-run moves muted.
+# • Larger endpoint loss: more NAs at the ends (centered MA) and a shorter visible span.
+# • Around the 2020 break: higher n recovers more slowly (averages across the jump), so it can understate the new level.
+
+
+#Q7)Simple Smoothing
+#• Perform a simple smoothing forecast for next 12 months for the time series.
+#o What is the value of alpha? What does that value signify?
+#o What is the value of initial state?
+#o What is the value of sigma? What does the sigma signify?
+
+# --- Simple Exponential Smoothing (SES): next 12 months (minimal) ---
+library(forecast)
+
+ses_fit <- ses(Transit_ts, h = 12)     # fit + 12-month forecast
+plot(ses_fit, main = "SES — Next 12 Months", ylab = "Ridership")
+
+# Alpha, initial state, sigma
+alpha_val  <- ses_fit$model$par["alpha"]
+init_level <- ses_fit$model$states[1, "l"]
+# Single, robust fix: compute sigma from residuals (works for ses_fit)
+sigma_val <- sd(residuals(ses_fit), na.rm = TRUE)
+
+cat("alpha =", round(alpha_val,3),
+    "| initial level =", round(init_level,0),
+    "| sigma =", round(sigma_val,0), "\n")
+
+# SES results (interpretation)
+# alpha = 0.837
+#   → High smoothing weight on the most recent month.
+#     The forecast reacts quickly to new data (less smoothing, more responsiveness).
+
+# initial level = 732,002
+#   → The model’s starting estimate of the series level at the beginning of the sample.
+
+# sigma = 55,220
+#   → Typical size of SES residuals (std. dev.) in riders.
+#     Think of it as the model’s average noise scale; larger σ = more unexplained variation.
+#
+# Short takeaway: With α ≈ 0.84 the SES forecast is very responsive; the baseline level
+# was set near 732k riders, and typical month-to-month forecast errors are ~55k riders.
+
+
+# Forecast table (next 12 months)
+last_m <- as.Date(format(max(TRANSIT$DATE), "%Y-%m-01"))
+future  <- seq(from = last_m + 31, by = "month", length.out = 12)
+data.frame(Month = format(future, "%Y-%m"),
+           Forecast = round(as.numeric(ses_fit$mean), 0))
+
+
+#Perform Residual Analysis for this technique.
+#o Do a plot of residuals. What does the plot indicate?
+#o Do a Histogram plot of residuals. What does the plot indicate?
+#o Do a plot of fitted values vs. residuals. What does the plot indicate?
+#o Do a plot of actual values vs. residuals. What does the plot indicate?
+#o Do an ACF plot of the residuals? What does this plot indicate?
+
+# --- SES Residual Analysis (simple) ---
+
+
+res <- residuals(ses_fit)
+fit <- fitted(ses_fit)
+
+par(mfrow = c(2,3))
+
+# 1) Residuals over time
+plot(res, type="h", main="Residuals over Time", ylab="Residuals"); abline(h=0, col="red")
+
+
+# 2) Histogram of residuals
+hist(res, main="Histogram of Residuals", xlab="Residuals")
+
+
+# 3) Fitted vs Residuals
+plot(fit, res, main="Fitted vs Residuals", xlab="Fitted", ylab="Residuals"); abline(h=0, col="red")
+
+
+# 4) Actual vs Residuals
+plot(ses_fit$x, res, main="Actual vs Residuals", xlab="Actual", ylab="Residuals"); abline(h=0, col="red")
+
+
+# 5) ACF of residuals
+forecast::Acf(res, main="ACF of Residuals")
+
+
+
+
+# --- SES Residual Analysis: What each plot shows ---
+
+# [Residuals over Time]
+# • Mostly around 0, but visible runs and a huge negative spike in 2020 → not white noise; structural break remains.
+
+# [Histogram of Residuals]
+# • Centered near 0 with heavy tails (left tail from the COVID drop) → residuals not perfectly normal.
+
+# [Fitted vs Residuals]
+# • Clear clustering and changing spread with fitted value → heteroskedasticity; some bias at higher fitted levels.
+
+# [Actual vs Residuals]
+# • Fan shape (variance grows with actual level) + regime clusters (pre vs post 2020) → multiplicative effects/level shift.
+
+# [ACF of Residuals]
+# • Significant spikes at small lags and around lag ~12 → leftover autocorrelation/seasonality; errors ≠ white noise.
+
+# Takeaway
+# • SES improves over naïve but still misses seasonality and the 2020 break.
+# • Consider seasonal ETS/Holt-Winters on log scale and/or include an intervention for 2020.
+
+#Print the 5 measures of accuracy for this forecasting technique
+#• Forecast
+#o Time series value for next year. Show table and plot
+#• Summarize this forecasting technique
+#o How good is the accuracy?
+#o What does it predict the value of time series will be in one year?
+#o Other observation
+
+
+
+# --- SES: 5 accuracy measures + next-12-months table & plot ---
+
+library(forecast)
+
+ses_fit <- ses(Transit_ts, h = 12)
+
+# 5 measures (training row)
+round(accuracy(ses_fit)[1, c("ME","RMSE","MAE","MAPE","MASE")], 3)
+
+# Next-year table
+last_m <- as.Date(format(max(TRANSIT$DATE), "%Y-%m-01"))
+future  <- seq(from = last_m + 31, by = "month", length.out = 12)
+data.frame(Month = format(future, "%Y-%m"),
+           Forecast = round(as.numeric(ses_fit$mean), 0))
+
+# Plot
+plot(ses_fit, main = "SES — Next 12 Months", ylab = "Ridership")
+
+
+# One-year-ahead value
+as.numeric(tail(ses_fit$mean, 1))
+
+
+# SES accuracy (training):
+# ME =  -812   | RMSE = 55,128 | MAE = 40,313 | MAPE = 6.03% | MASE = 0.709
+# → Small bias (near 0). ~6% average % error is solid. MASE < 1 ⇒ better than seasonal-naïve.
+
+# Next-year forecast (12 months):
+# 2023-08 … 2024-07: 539,578 (flat each month)
+# One-year-ahead point forecast = 539,578.
+
+# Summary:
+# • SES gives a constant-level forecast: every future month equals the last smoothed level.
+# • Accuracy is respectable (MAPE ≈ 6%, MASE < 1), but SES doesn’t model seasonality or trend,
+#   so it flattens the path. Use seasonal ETS/Holt-Winters if you want seasonal month-by-month variation.
+
+
+# --- SES — Next 12 Months (what the panel shows) ---
+# • Black = history; Blue line = SES mean forecast; dark/light bands = 80%/95% intervals.
+# • Shape: essentially flat because SES models *level only* (no explicit trend/seasonality).
+# • Level: forecast sits around ~540k riders; 12-months-ahead ≈ 539,578.
+# • Uncertainty: bands widen with horizon → growing risk further out.
+# • Context: remains below the pre-2020 baseline; with α ≈ 0.84 the model is very responsive,
+#   but it still can’t recreate month-to-month seasonal swings.
+# • Limitation: good as a smooth baseline; for seasonal patterns, prefer seasonal ETS/Holt-Winters.
+
+
+
+
+
+
+
+#Q8)Holt-Winters
+#• Perform Holt-Winters forecast for next 12 months for the time series.
+#o What is the value of alpha? What does that value signify?
+#o What is the value of beta? What does that value signify?
+#o What is the value of gamma? What does that value signify?
+#o What is the value of initial states for the level, trend and seasonality? What do
+#these values signify?
+#o What is the value of sigma? What does the sigma signify?
+#• Perform Residual Analysis for this technique.
+#o Do a plot of residuals. What does the plot indicate?
+#o Do a Histogram plot of residuals. What does the plot indicate?
+#o Do a plot of fitted values vs. residuals. What does the plot indicate?
+#o Do a plot of actual values vs. residuals. What does the plot indicate?
+#o Do an ACF plot of the residuals? What does this plot indicate?
+#• Print the 5 measures of accuracy for this forecasting technique
+#• Forecast
+#o Time series value for next year. Show table and plot
+#• Summarize this forecasting technique
+#o How good is the accuracy?
+#o What does it predict the value of time series will be in one year?
+#o Other observation
+
+
+# --- Holt–Winters  ---
+
+library(forecast)
+
+
+# Fit & forecast
+hw_fit <- stats::HoltWinters(Transit_ts, seasonal = "multiplicative")
+fc     <- forecast(hw_fit, h = 12)
+plot(fc, main = "Holt–Winters (multiplicative) — Next 12 Months", ylab = "Ridership")
+
+
+# What this Holt–Winters (multiplicative) forecast chart shows
+# • Black = historical monthly ridership. Blue = forecast mean for the next 12 months.
+# • Shaded bands = prediction intervals (dark ≈ 80%, light ≈ 95%); they widen with horizon → growing uncertainty.
+# • Seasonality is preserved: the blue line wiggles with the familiar annual pattern (multiplicative HW keeps % effects).
+# • Level: forecasts sit around the mid-500k to ~600k range, showing a modest upward recovery,
+#   but still well below the pre-2020 baseline (~800k–900k).
+# • Interpretation: Compared with SES, HW adds seasonal dynamics and adapts level/trend,
+#   giving more realistic month-to-month variation while not extrapolating the 2020 crash forward.
+
+
+# Parameters
+alpha <- as.numeric(hw_fit$alpha)   # weight on latest level
+beta  <- as.numeric(hw_fit$beta)    # weight on trend updates
+gamma <- as.numeric(hw_fit$gamma)   # weight on seasonal updates
+cat("alpha =", round(alpha,3),
+    "| beta =", round(beta,3),
+    "| gamma =", round(gamma,3), "\n")
+
+
+
+# alpha = 0.937  → very high level weight.
+#   ➜ The model reacts FAST to the latest month; little smoothing of the level.
+
+# beta  = 0.001  → essentially zero trend weight.
+#   ➜ The fitted trend is almost static; HW is not updating a slope each month
+#     (consistent with a level that’s stabilizing rather than trending strongly).
+
+# gamma = 1.000  → maximal seasonal update.
+#   ➜ Seasonal indices are updated as aggressively as possible each month.
+#     This keeps month-to-month seasonal swings very responsive (good after a break),
+#     but can be noisy; consider checking residuals/ACF for over-reaction.
+
+# Quick takeaway:
+# • Fast level adaptation (α≈0.94), almost no trend updating (β≈0), and very quick seasonal
+#   adaptation (γ=1). That matches a series with strong seasonality and a recent regime change.
+# • If residuals still show seasonal autocorrelation or look noisy, try ETS(auto) or HW on log scale.
+
+
+
+# Level & Trend
+# 1) Initial level, trend, seasonals from coefficients
+
+coefs <- hw_fit$coefficients
+
+# Safely grab coefficients right after the fit
+
+if (is.null(coefs)) stop("Holt–Winters coefficients are NULL; check the fit or data.")
+
+init_level <- unname(coefs["a"])
+init_trend <- if ("b" %in% names(coefs)) unname(coefs["b"]) else NA_real_
+init_seas  <- unname(coefs[grep("^s", names(coefs))])
+
+
+# 2) Neat printing (label seasonals with months)
+m <- frequency(Transit_ts)
+labs <- month.abb[1:length(init_seas)]
+names(init_seas) <- labs
+
+cat("Initial level =", round(init_level, 0), "\n")
+cat("Initial trend =", ifelse(is.na(init_trend), "NA", round(init_trend, 2)), "(per month)\n", sep = "")
+print(round(init_seas, 3))   # multiplicative HW → × factors like 0.96, 1.10, ...
+
+# 3) Sigma (typical residual size)
+sigma <- sd(residuals(fc), na.rm = TRUE)
+cat("Sigma (residual SD) =", round(sigma, 0), "\n")
+
+
+# --- Holt–Winters initial states  ---
+# Initial level = 543,563
+# • Starting baseline for the series at the beginning of the HW recursion (in riders).
+
+# Initial trend = 1,125.26 per month
+# • Starting slope: model begins by adding ~1.1k riders each month before it adapts.
+
+# Initial seasonality (multiplicative × factors):
+# Jan 0.989 | Feb 1.011 | Mar 1.066 | Apr 0.980 | May 0.952 | Jun 0.952
+# Jul 0.946 | Aug 1.029 | Sep 0.922 | Oct 1.021 | Nov 1.013 | Dec 0.979
+# • Interpretation: each month scales the level by this factor.
+#   – Highest seasonal month: March (×1.066 ≈ +6.6% vs baseline).
+#   – Lowest seasonal month: September (×0.922 ≈ −7.8% vs baseline).
+
+# Sigma (residual SD) = 43,475
+# • Typical forecast error size in original units; smaller σ ⇒ tighter residuals.
+
+
+
+
+
+# ===== Holt–Winters: sigma, residual analysis, accuracy, next-year forecast =====
+
+library(forecast)
+
+# Fit if needed
+if (!exists("hw_fit") || !exists("fc")) {
+  hw_fit <- HoltWinters(Transit_ts, seasonal = "multiplicative")
+  fc     <- forecast(hw_fit, h = 12)
+}
+
+# 1) Sigma (typical residual size, same units as the series)
+sigma <- sd(residuals(fc), na.rm = TRUE)
+cat("Sigma (residual SD) =", round(sigma, 0), "\n")
+
+# 2) Residual analysis plots
+res <- residuals(fc); fit <- fitted(fc)
+par(mfrow = c(2,3))
+plot(res, type="h", main="Residuals over Time"); abline(h=0, col="red")
+hist(res, main="Histogram of Residuals", xlab="Residuals")
+plot(fit, res, main="Fitted vs Residuals", xlab="Fitted", ylab="Residuals"); abline(h=0, col="red")
+plot(fc$x, res, main="Actual vs Residuals", xlab="Actual", ylab="Residuals"); abline(h=0, col="red")
+Acf(res, main="ACF of Residuals")
+qqnorm(res, main="Q-Q Plot"); qqline(res, col="red")
+par(mfrow = c(1,1))
+
+# What each HW residual chart shows (short):
+
+# Residuals over Time
+# • Mostly jittering around 0 → OK overall fit.
+# • One huge negative spike in 2020 → structural break/outlier not fully captured.
+
+# Histogram of Residuals
+# • Roughly bell-shaped and centered near 0, but with heavy tails → occasional large misses.
+
+# Fitted vs Residuals
+# • Clusters by regime (pre/post-2020) and a slight funnel at high fitted values → variance not fully constant.
+
+# Actual vs Residuals
+# • Fan shape as actuals increase → heteroskedasticity (errors grow with level).
+
+# ACF of Residuals
+# • Most bars within bands; small spikes near seasonal lags (~12) → weak remaining autocorrelation at seasonality.
+
+# Q–Q Plot
+# • Close to the line in the middle; tail deviations confirm heavy-tailed residuals (outliers).
+
+# Takeaway
+# • Holt-Winters (multiplicative) captures level + seasonality well, but the COVID-era break leaves
+#   a few big residuals and mild heteroskedasticity; a log/ETS model and/or 2020 intervention would further clean the errors.
+
+
+# 3) Five accuracy measures (training row)
+acc5 <- round(accuracy(fc)[1, c("ME","RMSE","MAE","MAPE","MASE")], 3)
+print(acc5)
+# Holt–Winters accuracy ( results) — 
+# ME   =  -2,729  → near-zero bias (forecasts very slightly low on average).
+# RMSE =  43,481  → penalizes big misses; solid given series scale.
+# MAE  =  26,758  → typical absolute miss ≈ 26.8k riders.
+# MAPE =   4.324% → strong accuracy for monthly transit (≈ 4.3% average % error).
+# MASE =   0.471  → < 1, so HW clearly beats a seasonal-naïve benchmark.
+
+# Takeaway: Holt–Winters (multiplicative) delivers low bias and ~4% MAPE with
+# errors ~47% smaller than seasonal-naïve (by MASE). Good fit that captures
+# seasonality and current level.
+
+# 4) Next-year (12 months) table + plot
+last_m <- as.Date(format(max(TRANSIT$DATE), "%Y-%m-01"))
+future <- as.Date(format(seq(from = last_m + 31, by = "month", length.out = 12), "%Y-%m-01"))
+fc_table <- data.frame(Month = format(future, "%Y-%m"),
+                       Forecast = round(as.numeric(fc$mean), 0))
+print(fc_table, row.names = FALSE)
+plot(fc, main = "Holt–Winters — Next 12 Months", ylab = "Ridership")
+
+
+# Holt–Winters — Next 12 Months (what the plot shows)
+
+# • Black = history of monthly ridership. Blue = HW mean forecast for the next 12 months.
+# • Shaded bands = prediction intervals (dark ~80%, light ~95%): they widen → uncertainty grows with horizon.
+# • Seasonality: the blue line keeps the usual month-to-month wiggles (HW models seasonal effects).
+# • Level: forecasts hover around the mid-500k–600k range — a modest recovery,
+#   still well below the pre-2020 baseline (~800k–900k).
+# • Read: compared with flat SES, HW gives seasonal month-by-month values but does not
+#   extrapolate the 2020 crash; intervals reflect remaining volatility.
+
+
+   
+#Q9)Accuracy Summary
+#• Show a table of all the forecast method above with their accuracy measures.
+#• Show the best and worst forecast method for the accuracy measure of your choice. Why
+#did you choose that accuracy measure?
+
+
+
+
+
+
+
+
+
+# Fit/forecast (train accuracy will be read from row 1 of accuracy())
+naive_fc <- naive(Transit_ts, h = 12)
+ses_fc   <- ses(Transit_ts, h = 12)
+hw_fit   <- HoltWinters(Transit_ts, seasonal = "multiplicative")
+hw_fc    <- forecast(hw_fit, h = 12)
+ets_fit  <- ets(Transit_ts)
+ets_fc   <- forecast(ets_fit, h = 12)
+
+# Collect 5 measures (training rows)
+acc_tab <- rbind(
+  Naive        = accuracy(naive_fc)[1, c("ME","RMSE","MAE","MAPE","MASE")],
+  SES          = accuracy(ses_fc)[1,   c("ME","RMSE","MAE","MAPE","MASE")],
+  HoltWinters  = accuracy(hw_fc)[1,     c("ME","RMSE","MAE","MAPE","MASE")],
+  ETS          = accuracy(ets_fc)[1,    c("ME","RMSE","MAE","MAPE","MASE")]
+)
+
+acc_tab_round <- round(acc_tab, 3)
+print(acc_tab_round)
+
+# Best / Worst by MASE (lower is better)
+best_method  <- rownames(acc_tab)[which.min(acc_tab[,"MASE"])]
+worst_method <- rownames(acc_tab)[which.max(acc_tab[,"MASE"])]
+
+cat("\nBest (by MASE): ", best_method,
+    " | MASE = ", round(min(acc_tab[,"MASE"]), 3), "\n", sep = "")
+cat("Worst (by MASE): ", worst_method,
+    " | MASE = ", round(max(acc_tab[,"MASE"]), 3), "\n", sep = "")
+
+
+# --- Accuracy Summary (from  table) ---
+# Best (by MASE): ETS (MASE = 0.452, MAPE = 4.10%, RMSE = 40,338, MAE = 25,687)
+# Runner-up: Holt-Winters (MASE = 0.471, MAPE = 4.32%)
+# SES: MASE = 0.709, MAPE = 6.03%
+# Worst (by MASE): Naïve (MASE = 0.730, MAPE = 6.06%)
+# Why MASE? Scale-free and directly benchmarks against seasonal-naïve (MASE < 1 = beats naïve),
+# avoiding MAPE’s instability near small values and RMSE’s sensitivity to big outliers.
+
+
+
+
+
+
+
+
+#Q10)Conclusion
+#• Summarize your analysis of time series value over the time-period.
+#• Based on your analysis and forecast above, do you think the value of the time series will
+#increase, decrease or stay flat over the next year? How about next 2 years?
+
+
+
+
+# --- Conclusion ---
+# Pattern & context: Strong annual seasonality; major 2020 break with gradual recovery afterward.
+# Over the sample: Levels remain below pre-2020 despite recovery; seasonality appears multiplicative.
+# Next 12 months: Modest increase with normal seasonal ups/downs, centered ~mid-500k–600k.
+# Next 24 months: Likely gradual rise, but still below pre-2020 unless external drivers change;
+# forecast uncertainty widens with horizon.
+# Best model to report: ETS (lowest MASE) with Holt-Winters close behind; both capture proportional
+# seasonality and current level better than SES/Naïve.
+
+
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

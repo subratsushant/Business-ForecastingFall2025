@@ -1,0 +1,264 @@
+---
+title: "arima_asgn"
+output: html_document
+date: "2025-11-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+# Load packages
+library(readr)    # read_csv()
+library(forecast) # ts(), auto.arima(), forecast(), checkresiduals()
+library(ggplot2)  # autoplot()
+
+# 1. Read data 
+
+food <- read_csv("/Users/subratsushant/Documents/r_programming/upload food.csv")
+
+# 2. Create full time series for Food Price Index 
+
+food_fpi_ts <- ts(
+  food$`Food Price Index`,  # numeric column
+  start     = c(1990, 1),   # to adjust if your first year is different
+  frequency = 12            # monthly data
+)
+
+plot(food_fpi_ts)
+
+# Interpretation of food_fpi_ts plot 
+# - This is the monthly Food Price Index from ~1990–2025.
+# - Overall pattern: strong UPWARD trend. Prices in the 1990s (~60–70) are
+#   much lower than after 2010 and especially after 2020.
+# - 1990s–early 2000s: relatively stable, low volatility, small ups/downs.
+# - 2004–2012: big structural shift. Very sharp rises, peaks, and drops
+#   (big spikes around 2008 and 2011) → much higher level and volatility.
+# - 2013–2019: still high but more of a “plateau” with medium-sized cycles.
+# - 2020+: prices surge again to the highest level in the whole sample,
+#   then fall slightly but stay very high, with large swings.
+# - Seasonality is minor visually; the series is dominated by trend and large
+#   shocks. Both the mean and variance change over time → clearly
+#   NON-STATIONARY, so differencing is needed before ARIMA modeling.
+
+
+acf(food_fpi_ts)
+# Interpretation of ACF for food_fpi_ts 
+# - The first lag is very close to 1 and the bars decline only slowly as lag increases.
+# - Almost all bars are well outside the blue dashed bounds → autocorrelations are
+#   statistically significant at many lags.
+# - This slow, gradual decay is a classic sign of a NON-STATIONARY, strongly trended
+#   series (similar to a random walk / strong persistence).
+# - In plain English: current Food Price Index values are heavily influenced by
+#   past values, and shocks die out very slowly.
+# - Because of this pattern, we definitely need differencing (d > 0, and possibly
+#   seasonal differencing D > 0) before fitting an ARIMA model.
+
+
+
+
+
+# Create a time series starting from Jan 2022 onwards
+food_fpi_ts_2022 <- window(food_fpi_ts, start = c(2022, 1))
+
+# Plot the truncated time series (2022+ only)
+autoplot(food_fpi_ts_2022) +
+  ggtitle("Food Price Index – Monthly (From 2022 Onwards)") +
+  xlab("Year") + ylab("Food Price Index")
+
+# Interpretation of Food Price Index – From 2022 Onwards
+# - This plot shows only the recent period (2022–2025). Each point is a month.
+# - Early 2022: the index is extremely high (around 160), meaning food prices
+#   were at record levels at the start of the sample.
+# - 2022–mid 2024: the line slopes down almost continuously → a long, steady
+#   decline in the index as food prices ease from the peak.
+# - Around late 2023 / early 2024: the series reaches its local minimum
+#   (around 118–120) – this is the lowest point in this recent window.
+# - Mid 2024–2025: the trend reverses; the index starts to climb again and
+#   moves back up toward 130 → recent re-acceleration in food prices.
+# - Overall: even in this short window the series is not flat; it has a clear
+#   downward trend followed by a new upward trend, so it is still non-stationary
+#   and will need differencing before ARIMA fitting.
+
+
+acf(food_fpi_ts_2022)
+
+# Interpretation of ACF for food_fpi_ts_2022
+# - This is the ACF of Food Price Index using only data from 2022 onward.
+# - Lag 1 is very high (close to 1), and the correlations decline only
+#   gradually across the first several lags.
+# - Many of the early bars are above the blue bounds → strong, statistically
+#   significant autocorrelation at short lags.
+# - The slow decay means current values are still heavily influenced by recent
+#   past values; shocks fade out only slowly.
+# - There is no clear single spike at a specific lag (e.g., 12), so any
+#   seasonal pattern is not dominant in this short window.
+# - Overall, the series is still highly persistent and effectively
+#   non-stationary, so differencing is justified before or within ARIMA
+#   modeling (as auto.arima() will do).
+
+
+# 3. Fit ARIMA model on 2022+ data 
+
+
+fit_fpi_2022 <- auto.arima(food_fpi_ts_2022)
+
+# Show ARIMA model output 
+summary(fit_fpi_2022)
+
+# Interpretation of ARIMA output for food_fpi_ts_2022
+# Series: food_fpi_ts_2022 
+# ARIMA(0,1,0)
+# - p = 0, d = 1, q = 0 → the model just differences the series once and
+#   assumes no AR or MA terms. This is essentially a random-walk type model
+#   for the differenced data (no extra structure beyond the first difference).
+
+# sigma^2 = 15.99;  log likelihood = -120.62
+# - sigma^2 is the variance of the residuals (average squared size of the
+#   forecast errors). Smaller sigma^2 means a tighter fit (for comparable models).
+# - The log likelihood measures how well the model explains the data; it is
+#   used to compute AIC/AICc/BIC and is not interpreted directly.
+
+# AIC=243.23   AICc=243.33   BIC=244.99
+# - These are information criteria used to compare ARIMA models.
+# - Lower values indicate a better trade-off between goodness-of-fit and
+#   model complexity. auto.arima() picked this model because it had one of
+#   the lowest AICc values among the candidates it tried.
+
+# Training set error measures:
+# ME     = -0.124  → mean error is very close to 0, so the model is not
+#                    systematically over- or under-predicting.
+# RMSE   =  3.95   → typical size of squared errors (penalizes big errors).
+# MAE    =  2.09   → average absolute deviation of forecasts from actuals.
+# MPE    = -0.13%  → on average the percentage error is basically zero
+#                    (tiny negative bias).
+# MAPE   =  1.53%  → on average, forecasts are within about 1.5% of the
+#                    actual Food Price Index values over 2022+.
+# MASE   =  0.17   → well below 1, meaning this ARIMA model performs much
+#                    better than a naïve benchmark model on the training data.
+
+# ACF1 = 0.282
+# - Residual autocorrelation at lag 1 is about 0.28. Ideally this would be
+#   closer to 0; a positive value suggests there may still be some remaining
+#   short-run structure, which we check more formally with the Ljung–Box
+#   test inside checkresiduals().
+
+
+# 4. Residual analysis (2022+ model) 
+
+checkresiduals(fit_fpi_2022)
+# → residual time plot, ACF of residuals, Ljung–Box test
+# Residual diagnostics for ARIMA(0,1,0) on food_fpi_ts_2022
+# Top-left (residual time plot):
+# - Big positive and negative spikes right at the start, but after that the
+#   residuals hover around 0 with no visible trend or seasonality.
+# - Variability looks roughly constant over time → no strong heteroskedasticity.
+
+# Bottom-left (ACF of residuals):
+# - Most bars are inside the blue bounds; only a couple of lags are close to
+#   the limits → very little remaining autocorrelation.
+# - This suggests the ARIMA(0,1,0) has captured most of the time dependence.
+
+# Bottom-right (histogram + density):
+# - Residuals are roughly bell-shaped and centered near 0.
+# - There are a few extreme values in the tails, but overall the distribution
+#   is reasonably close to normal for forecasting purposes.
+
+# Ljung–Box test in console:
+# - Q* = 10.957, df = 9, p-value = 0.2786 (> 0.05).
+# - We FAIL to reject the null hypothesis that residuals are white noise.
+# - Conclusion: the residuals behave like uncorrelated noise, so this ARIMA
+#   model is an adequate fit for the 2022+ Food Price Index series.
+
+
+# 5. Forecast next 5 periods from this model ------------------------------
+
+fpi_fc_2022 <- forecast(fit_fpi_2022, h = 5)
+
+# Print numeric forecast values + intervals
+fpi_fc_2022
+
+# Plot the forecast
+autoplot(fpi_fc_2022) +
+  ggtitle("ARIMA Forecast – Food Price Index (Next 5 Periods, Model Fit from 2022+)") +
+  xlab("Year") + ylab("Food Price Index")
+
+# Interpretation of ARIMA forecast (2022+ model)
+# ---------------------------------------------
+# - The black line up to ~2025 shows the actual Food Price Index from 2022 onward:
+#     * sharp drop from very high levels in 2022,
+#     * then a bottom around 2024,
+#     * followed by a mild recovery into 2025.
+# - The straight blue line after the last observation is the ARIMA(0,1,0)
+#   point forecast. Because this model is basically a random walk, it
+#   projects the future index to stay roughly at the last observed level
+#   (around 130) rather than trending up or down.
+# - The dark and light shaded bands are 80% and 95% prediction intervals:
+#     * they widen as we move further into the future, showing increasing
+#       uncertainty in the forecasts.
+#     * the bands are roughly symmetric around the flat forecast line,
+#       meaning the model sees similar risk of prices going higher or lower.
+# - Management takeaway: given the recent data, the model expects food prices
+#   to remain around current levels over the next 5 months, but with enough
+#   uncertainty that both moderate increases and decreases are plausible.
+
+
+
+# 6. Accuracy of the ARIMA model (training = 2022+ data) ------------------
+
+accuracy(fit_fpi_2022)
+
+
+# Interpretation of accuracy() output for ARIMA(0,1,0) on food_fpi_ts_2022
+# -----------------------------------------------------------------------
+# ME  = -0.1241886
+#   - Mean Error (average signed error). Very close to 0 and slightly
+#     negative → the model has almost no systematic bias (tiny under-forecast).
+#
+# RMSE = 3.953417
+#   - Root Mean Squared Error. Typical size of the errors, with big errors
+#     penalized more. Here, forecasts are usually within about 4 index points
+#     of the actual Food Price Index.
+#
+# MAE = 2.093993
+#   - Mean Absolute Error. On average, the forecast misses the actual value
+#     by about 2 index points.
+#
+# MPE = -0.1301194
+#   - Mean Percentage Error. On average, forecasts are about 0.13% below the
+#     actual values → essentially no percentage bias.
+#
+# MAPE = 1.531023
+#   - Mean Absolute Percentage Error. Forecasts are off by about 1.5% on
+#     average, which is quite accurate for management purposes.
+#
+# MASE = 0.1744086
+#   - Mean Absolute Scaled Error. Because this is far below 1, the ARIMA
+#     model is much better than a naïve benchmark (which would just use the
+#     last observation as the forecast).
+#
+# ACF1 = 0.2820456
+#   - Autocorrelation of residuals at lag 1. A value of ~0.28 is positive but
+#     not huge. Combined with the Ljung–Box p-value > 0.05 from
+#     checkresiduals(), this suggests only mild remaining structure and that
+#     the residuals are roughly white noise.
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
